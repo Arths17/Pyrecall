@@ -53,8 +53,8 @@ dev = [
 mimi = "mimi.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/Arths17/keel"
-"Bug Tracker" = "https://github.com/Arths17/keel/issues"
+Homepage = "https://github.com/Arths17/Mimi"
+"Bug Tracker" = "https://github.com/Arths17/Mimi/issues"
 PyPI = "https://pypi.org/project/mimi"
 
 [tool.hatch.build.targets.wheel]

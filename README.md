@@ -1,7 +1,7 @@
 # mimi
 
 [![PyPI version](https://img.shields.io/pypi/v/mimi.svg)](https://pypi.org/project/mimi/)
-[![CI](https://github.com/Arths17/keel/actions/workflows/ci.yml/badge.svg)](https://github.com/Arths17/keel/actions/workflows/ci.yml)
+[![CI](https://github.com/Arths17/Mimi/actions/workflows/ci.yml/badge.svg)](https://github.com/Arths17/Mimi/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 
@@ -242,7 +242,7 @@ Model(
 Issues and PRs are welcome. Open an issue first for large changes.
 
 ```bash
-git clone https://github.com/Arths17/keel
+git clone https://github.com/Arths17/Mimi
 cd mimi
 pip install -e ".[dev]"
 pytest

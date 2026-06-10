@@ -17,13 +17,13 @@ Quick start::
 
 from .detector import ForgettingDetector, ForgettingReport, CategoryComparison
 from .live import LiveLearner
-from .model import Model, KeelError
+from .model import Model, MimiError
 from .rollback import RollbackManager
 from .snapshot import SkillScore, SkillSnapshot
 
 __all__ = [
     "Model",
-    "KeelError",
+    "MimiError",
     "SkillSnapshot",
     "SkillScore",
     "ForgettingDetector",

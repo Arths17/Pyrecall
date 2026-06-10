@@ -45,7 +45,7 @@ _LORA_TARGETS: dict[str, list[str]] = {
 }
 
 
-class KeelError(Exception):
+class MimiError(Exception):
     """Raised for user-facing operational errors in mimi."""
 
 
@@ -99,7 +99,7 @@ class Model:
             load_in_8bit: Load base model in 8-bit. Requires ``bitsandbytes``.
         """
         if strategy not in ("lora", "qlora"):
-            raise KeelError(
+            raise MimiError(
                 f"Unknown strategy '{strategy}'. "
                 "mimi supports strategy='lora' or strategy='qlora'. "
                 "Example: Model('meta-llama/Llama-3.2-1B', strategy='qlora', load_in_4bit=True)"
@@ -122,7 +122,7 @@ class Model:
         bnb_config = None
         if strategy == "qlora" or load_in_4bit or load_in_8bit:
             if load_in_4bit and load_in_8bit:
-                raise KeelError("Cannot use load_in_4bit and load_in_8bit together.")
+                raise MimiError("Cannot use load_in_4bit and load_in_8bit together.")
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=load_in_4bit,
                 load_in_8bit=load_in_8bit,
@@ -231,7 +231,7 @@ class Model:
         """
         data_file = Path(data_path)
         if not data_file.exists():
-            raise KeelError(
+            raise MimiError(
                 f"Training data not found at '{data_path}'. "
                 "Provide a JSONL, CSV, or Parquet file where each row has a 'text' column."
             )
@@ -241,7 +241,7 @@ class Model:
         _FORMAT_MAP = {".jsonl": "json", ".json": "json", ".csv": "csv", ".parquet": "parquet"}
         fmt = _FORMAT_MAP.get(data_file.suffix.lower())
         if fmt is None:
-            raise KeelError(
+            raise MimiError(
                 f"Unsupported file format '{data_file.suffix}'. "
                 "Use .jsonl, .csv, or .parquet."
             )
@@ -318,7 +318,7 @@ class Model:
             printed to the terminal automatically.
         """
         if not self._baseline_snapshot_name:
-            raise KeelError(
+            raise MimiError(
                 "No baseline snapshot found.\n"
                 "Call model.snapshot(name='before_v1') before fine-tuning, "
                 "then call model.check() afterwards."
@@ -354,7 +354,7 @@ class Model:
         snap = self.rollback_manager.load_snapshot(to)
 
         if snap.adapter_path is None or not snap.adapter_path.exists():
-            raise KeelError(
+            raise MimiError(
                 f"Snapshot '{to}' has no saved adapter weights at "
                 f"'{snap.adapter_path}'. "
                 "Only snapshots taken with model.snapshot() can be used for rollback."

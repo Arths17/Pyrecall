@@ -106,9 +106,9 @@ class TestModelInit:
             patch("mimi.model.AutoModelForCausalLM.from_pretrained", return_value=mock_base),
             patch("mimi.model.get_peft_model", return_value=mock_peft),
         ):
-            from mimi.model import KeelError, Model
+            from mimi.model import MimiError, Model
 
-            with pytest.raises(KeelError, match="strategy"):
+            with pytest.raises(MimiError, match="strategy"):
                 Model("test/model", strategy="full", snapshot_dir=tmp_snapshot_dir)
 
     def test_pad_token_set_when_missing(self, patched_model) -> None:
@@ -167,10 +167,10 @@ class TestModelCheck:
             patch("mimi.model.compute_embeddings", return_value=torch.randn(32)),
             patch("mimi.model.cosine_similarity", return_value=0.75),
         ):
-            from mimi.model import KeelError, Model
+            from mimi.model import MimiError, Model
 
             m = Model("test/model", snapshot_dir=tmp_snapshot_dir)
-            with pytest.raises(KeelError, match="snapshot"):
+            with pytest.raises(MimiError, match="snapshot"):
                 m.check()
 
     def test_check_returns_report(self, patched_model) -> None:
@@ -188,9 +188,9 @@ class TestModelCheck:
 
 class TestModelLearn:
     def test_learn_raises_for_missing_file(self, patched_model) -> None:
-        from mimi.model import KeelError
+        from mimi.model import MimiError
 
-        with pytest.raises(KeelError, match="not found"):
+        with pytest.raises(MimiError, match="not found"):
             patched_model.learn("/nonexistent/data.jsonl")
 
     def test_learn_runs_with_valid_jsonl(
@@ -260,11 +260,11 @@ class TestLearnDataFormats:
         assert mock_ds.call_args[0][0] == "parquet"
 
     def test_unsupported_format_raises(self, patched_model, tmp_path: Path) -> None:
-        from mimi.model import KeelError
+        from mimi.model import MimiError
 
         f = tmp_path / "data.txt"
         f.write_text("hello\n")
-        with pytest.raises(KeelError, match="Unsupported file format"):
+        with pytest.raises(MimiError, match="Unsupported file format"):
             patched_model.learn(str(f), epochs=1)
 
 
@@ -303,9 +303,9 @@ class TestQLoRA:
             patch("mimi.model.get_peft_model", return_value=mock_peft),
             patch("mimi.model.BitsAndBytesConfig"),
         ):
-            from mimi.model import KeelError, Model
+            from mimi.model import MimiError, Model
 
-            with pytest.raises(KeelError, match="Cannot use load_in_4bit and load_in_8bit"):
+            with pytest.raises(MimiError, match="Cannot use load_in_4bit and load_in_8bit"):
                 Model(
                     "test/model",
                     load_in_4bit=True,
@@ -323,9 +323,9 @@ class TestQLoRA:
             patch("mimi.model.AutoModelForCausalLM.from_pretrained", return_value=mock_base),
             patch("mimi.model.get_peft_model", return_value=mock_peft),
         ):
-            from mimi.model import KeelError, Model
+            from mimi.model import MimiError, Model
 
-            with pytest.raises(KeelError, match="strategy"):
+            with pytest.raises(MimiError, match="strategy"):
                 Model("test/model", strategy="full", snapshot_dir=tmp_snapshot_dir)
 
 
