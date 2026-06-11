@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from encrypt import Encryptor
+from .encrypt import Encryptor
 @dataclass
 class SkillScore:
     """Score for a single benchmark item."""
