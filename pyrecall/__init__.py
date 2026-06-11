@@ -15,7 +15,9 @@ Quick start::
         model.rollback(to="before_v1")
 """
 
-from .detector import ForgettingDetector, ForgettingReport, CategoryComparison
+from importlib.metadata import version, PackageNotFoundError
+
+from .detector import CategoryComparison, ForgettingDetector, ForgettingReport
 from .live import LiveLearner
 from .model import Model, PyrecallError
 from .replay import ReplayBuffer
@@ -35,4 +37,7 @@ __all__ = [
     "ReplayBuffer",
 ]
 
-__version__ = "0.1.3"
+try:
+    __version__ = version("pyrecall")
+except PackageNotFoundError:
+    __version__ = "0.0.0+dev"

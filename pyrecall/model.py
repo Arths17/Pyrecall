@@ -487,10 +487,16 @@ class Model:
             live_batch_size: Number of interactions that trigger a live fine-tune run.
                 Only used when *live_learning* is True.
         """
-        import uvicorn
-        from fastapi import FastAPI
-        from fastapi.middleware.cors import CORSMiddleware
-        from pydantic import BaseModel as _Base
+        try:
+            import uvicorn
+            from fastapi import FastAPI
+            from fastapi.middleware.cors import CORSMiddleware
+            from pydantic import BaseModel as _Base
+        except ImportError as exc:
+            raise PyrecallError(
+                "model.serve() requires the 'serve' extra. "
+                "Install it with: pip install pyrecall[serve]"
+            ) from exc
 
         app = FastAPI(
             title="pyrecall",
