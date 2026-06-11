@@ -173,6 +173,90 @@ def init(
 
 
 @app.command()
+def learn(
+    data: Annotated[
+        str,
+        typer.Argument(help="Path to training data (.jsonl, .csv, or .parquet). Each row needs a 'text' column."),
+    ],
+    epochs: Annotated[
+        int,
+        typer.Option("--epochs", "-e", help="Number of full passes over the training data"),
+    ] = 3,
+    batch_size: Annotated[
+        Optional[int],
+        typer.Option("--batch-size", help="Per-device training batch size (overrides init setting)"),
+    ] = None,
+    learning_rate: Annotated[
+        Optional[float],
+        typer.Option("--learning-rate", help="AdamW learning rate (overrides init setting)"),
+    ] = None,
+    max_length: Annotated[
+        Optional[int],
+        typer.Option("--max-length", help="Tokenisation truncation length (overrides init setting)"),
+    ] = None,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", help="Resume from the latest checkpoint if a previous run was interrupted"),
+    ] = False,
+    snapshot_after: Annotated[
+        Optional[str],
+        typer.Option("--snapshot-after", help="Take a named snapshot immediately after training completes"),
+    ] = None,
+) -> None:
+    """
+    Fine-tune the model on a local dataset.
+
+    Reads hyperparameters from .pyrecall.json unless overridden by flags.
+    Pass --snapshot-after <name> to automatically snapshot the model once
+    training finishes, so you can run pyrecall check straight away.
+
+    Example::
+
+        pyrecall learn train.jsonl --epochs 5 --snapshot-after after_v2
+    """
+    if not Path(data).exists():
+        console.print(f"[red]Error:[/red] Training data file not found: '{data}'")
+        raise typer.Exit(1)
+
+    config = _read_config()
+
+    from pyrecall.model import Model, PyrecallError
+
+    model_obj = Model(
+        config["model_name"],
+        strategy=config.get("strategy", "lora"),
+        lora_r=config.get("lora_r", 16),
+        lora_alpha=config.get("lora_alpha", 32),
+        lora_dropout=config.get("lora_dropout", 0.1),
+        learning_rate=config.get("learning_rate", 2e-4),
+        batch_size=config.get("batch_size", 4),
+        max_length=config.get("max_length", 512),
+        forgetting_threshold=config.get("forgetting_threshold", 0.10),
+        replay_buffer_size=config.get("replay_buffer_size", 500),
+        replay_mix_ratio=config.get("replay_mix_ratio", 0.3),
+    )
+
+    try:
+        model_obj.learn(
+            data,
+            epochs=epochs,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            max_length=max_length,
+            resume=resume,
+        )
+    except PyrecallError as exc:
+        console.print(f"[red]Error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if snapshot_after:
+        model_obj.snapshot(name=snapshot_after)
+        config["baseline_snapshot"] = snapshot_after
+        _write_config(config)
+        console.print(f"[dim]  Baseline updated to '{snapshot_after}' in {_CONFIG_FILE}.[/dim]")
+
+
+@app.command()
 def snapshot(
     name: Annotated[str, typer.Argument(help="Name for this snapshot, e.g. 'before_v2'")],
 ) -> None:

@@ -1,4 +1,4 @@
-"""Tests for all 5 CLI commands: init, snapshot, check, rollback, status."""
+"""Tests for all CLI commands: init, learn, snapshot, check, rollback, status."""
 
 from __future__ import annotations
 
@@ -162,6 +162,172 @@ class TestInit:
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
         # Original config should be preserved
         assert config["model_name"] == "gpt2"
+
+
+# ── learn ─────────────────────────────────────────────────────────────────────
+
+
+class TestLearn:
+    def _config(self, tmp_path: Path, **kwargs) -> None:
+        _write_config(tmp_path, **kwargs)
+
+    def test_fails_without_config_file(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        result = runner.invoke(app, ["learn", str(data)])
+        assert result.exit_code == 1
+
+    def test_fails_when_data_file_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        result = runner.invoke(app, ["learn", str(tmp_path / "nope.jsonl")])
+        assert result.exit_code == 1
+
+    def test_error_message_contains_missing_path(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        result = runner.invoke(app, ["learn", str(tmp_path / "nope.jsonl")])
+        assert "nope.jsonl" in result.output
+
+    def test_calls_model_learn_with_data_path(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            runner.invoke(app, ["learn", str(data)])
+
+        mock_model.learn.assert_called_once()
+        assert mock_model.learn.call_args[0][0] == str(data)
+
+    def test_default_epochs_is_three(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            runner.invoke(app, ["learn", str(data)])
+
+        assert mock_model.learn.call_args[1]["epochs"] == 3
+
+    def test_custom_epochs_passed_through(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            runner.invoke(app, ["learn", str(data), "--epochs", "7"])
+
+        assert mock_model.learn.call_args[1]["epochs"] == 7
+
+    def test_resume_flag_passed_through(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            runner.invoke(app, ["learn", str(data), "--resume"])
+
+        assert mock_model.learn.call_args[1]["resume"] is True
+
+    def test_snapshot_after_triggers_snapshot_call(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+        mock_model.snapshot.return_value = _make_snapshot("post_train")
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            runner.invoke(app, ["learn", str(data), "--snapshot-after", "post_train"])
+
+        mock_model.snapshot.assert_called_once_with(name="post_train")
+
+    def test_snapshot_after_updates_baseline_in_config(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+        mock_model.snapshot.return_value = _make_snapshot("post_train")
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            runner.invoke(app, ["learn", str(data), "--snapshot-after", "post_train"])
+
+        config = json.loads((tmp_path / _CONFIG_FILE).read_text())
+        assert config["baseline_snapshot"] == "post_train"
+
+    def test_no_snapshot_after_skips_snapshot_call(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            runner.invoke(app, ["learn", str(data)])
+
+        mock_model.snapshot.assert_not_called()
+
+    def test_pyrecall_error_exits_with_code_one(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+
+        from pyrecall.model import PyrecallError
+        mock_model.learn.side_effect = PyrecallError("bad format")
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            result = runner.invoke(app, ["learn", str(data)])
+
+        assert result.exit_code == 1
+
+    def test_exit_code_zero_on_success(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._config(tmp_path)
+        data = tmp_path / "train.jsonl"
+        data.write_text('{"text": "hi"}\n')
+        mock_model = MagicMock()
+
+        with patch("pyrecall.model.Model", return_value=mock_model):
+            result = runner.invoke(app, ["learn", str(data)])
+
+        assert result.exit_code == 0
 
 
 # ── snapshot ──────────────────────────────────────────────────────────────────
