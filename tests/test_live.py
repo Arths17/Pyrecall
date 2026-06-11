@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 
 from pyrecall.live import LiveLearner
 
-
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 
@@ -49,9 +48,7 @@ class TestSQLiteLogging:
         conn = sqlite3.connect(learner.db_path)
         tables = {
             row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         conn.close()
         assert "interactions" in tables

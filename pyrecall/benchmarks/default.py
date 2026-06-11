@@ -56,8 +56,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "on what day of the week will the event occur?"
         ),
         reference_answer=(
-            "18 mod 7 = 4, so the event is 4 days after Wednesday. "
-            "Wednesday + 4 days = Sunday."
+            "18 mod 7 = 4, so the event is 4 days after Wednesday. Wednesday + 4 days = Sunday."
         ),
     ),
     Benchmark(
@@ -90,8 +89,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "Express as a fraction and a percentage."
         ),
         reference_answer=(
-            "There are 8 blue out of 20 total marbles. "
-            "Probability = 8/20 = 2/5 = 40%."
+            "There are 8 blue out of 20 total marbles. Probability = 8/20 = 2/5 = 40%."
         ),
     ),
     Benchmark(
@@ -100,9 +98,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "If you fold a piece of paper in half 10 times, "
             "how many layers thick is it? Show your working."
         ),
-        reference_answer=(
-            "Each fold doubles the layers. After 10 folds: 2^10 = 1,024 layers."
-        ),
+        reference_answer=("Each fold doubles the layers. After 10 folds: 2^10 = 1,024 layers."),
     ),
     Benchmark(
         category="reasoning",
@@ -136,9 +132,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
     ),
     Benchmark(
         category="instruction_following",
-        prompt=(
-            "Answer this question in exactly two sentences: What is machine learning?"
-        ),
+        prompt=("Answer this question in exactly two sentences: What is machine learning?"),
         reference_answer=(
             "Machine learning is a branch of artificial intelligence where systems learn "
             "patterns from data instead of being explicitly programmed. "
@@ -164,9 +158,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "Translate the following sentence into formal English: "
             "'gonna grab some food, u coming?'"
         ),
-        reference_answer=(
-            "I am going to get something to eat — would you like to join me?"
-        ),
+        reference_answer=("I am going to get something to eat — would you like to join me?"),
     ),
     Benchmark(
         category="instruction_following",
@@ -190,9 +182,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "Rewrite this sentence to start with 'Although': "
             "'The experiment failed, but the team learned a great deal from it.'"
         ),
-        reference_answer=(
-            "Although the experiment failed, the team learned a great deal from it."
-        ),
+        reference_answer=("Although the experiment failed, the team learned a great deal from it."),
     ),
     # ── CODING (8) ──────────────────────────────────────────────────────────────
     Benchmark(
@@ -527,9 +517,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "What language is the following text written in, and what does it mean in English?\n"
             "「私は毎朝コーヒーを飲みます。」"
         ),
-        reference_answer=(
-            "The text is Japanese. It means: 'I drink coffee every morning.'"
-        ),
+        reference_answer=("The text is Japanese. It means: 'I drink coffee every morning.'"),
     ),
     Benchmark(
         category="multilingual",
@@ -539,9 +527,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "Le week-end, elle aime lire et se promener dans le parc.'\n\n"
             "Question: What does Marie do on weekends?"
         ),
-        reference_answer=(
-            "On weekends, Marie likes to read and go for walks in the park."
-        ),
+        reference_answer=("On weekends, Marie likes to read and go for walks in the park."),
     ),
     Benchmark(
         category="multilingual",
@@ -549,9 +535,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "Translate this sentence from Spanish to English: "
             "'El cambio climático es uno de los mayores desafíos de nuestro tiempo.'"
         ),
-        reference_answer=(
-            "Climate change is one of the greatest challenges of our time."
-        ),
+        reference_answer=("Climate change is one of the greatest challenges of our time."),
     ),
     Benchmark(
         category="multilingual",
@@ -605,7 +589,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "Which tool should you use, and what call would you make?"
         ),
         reference_answer=(
-            "Use the calculator tool: calculator(expression=\"347 * 29\"). "
+            'Use the calculator tool: calculator(expression="347 * 29"). '
             "This is a pure arithmetic question, so wikipedia_search is not appropriate."
         ),
     ),
@@ -616,9 +600,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "{'temperature_c': 22, 'condition': 'partly cloudy', 'humidity_pct': 58}\n"
             "Summarise this for the user in one natural sentence."
         ),
-        reference_answer=(
-            "It's currently 22°C and partly cloudy with a humidity of 58%."
-        ),
+        reference_answer=("It's currently 22°C and partly cloudy with a humidity of 58%."),
     ),
     Benchmark(
         category="tool_use",
@@ -650,7 +632,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
             "Should you call a tool? If yes, which one and with what arguments?"
         ),
         reference_answer=(
-            "Yes — use wikipedia_search(topic=\"capital of France\") to retrieve the answer. "
+            'Yes — use wikipedia_search(topic="capital of France") to retrieve the answer. '
             "Calculator is irrelevant and get_weather does not answer geography questions."
         ),
     ),
@@ -666,9 +648,7 @@ DEFAULT_BENCHMARKS: list[Benchmark] = [
     # ── ADVANCED MATH (8) ─────────────────────────────────────────────────────────
     Benchmark(
         category="advanced_math",
-        prompt=(
-            "Solve for x: 3x² − 7x + 2 = 0. Show your working using the quadratic formula."
-        ),
+        prompt=("Solve for x: 3x² − 7x + 2 = 0. Show your working using the quadratic formula."),
         reference_answer=(
             "Using x = (7 ± √(49 − 24)) / 6 = (7 ± √25) / 6 = (7 ± 5) / 6. "
             "So x = 12/6 = 2 or x = 2/6 = 1/3."

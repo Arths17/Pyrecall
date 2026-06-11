@@ -75,9 +75,7 @@ def _make_mock_manager(
 
 
 class TestInit:
-    def test_creates_config_file(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_creates_config_file(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
@@ -90,25 +88,19 @@ class TestInit:
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0
 
-    def test_default_model_written(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_default_model_written(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
         assert config["model_name"] == "meta-llama/Llama-3.2-1B"
 
-    def test_custom_model_written(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_custom_model_written(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init", "--model", "gpt2"])
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
         assert config["model_name"] == "gpt2"
 
-    def test_custom_strategy_written(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_custom_strategy_written(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init", "--strategy", "qlora"])
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
@@ -129,9 +121,7 @@ class TestInit:
         result = runner.invoke(app, ["init", "--model", "gpt2"])
         assert "gpt2" in result.output
 
-    def test_short_flag_works(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_short_flag_works(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init", "-m", "distilgpt2"])
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
@@ -211,9 +201,7 @@ class TestLearn:
         mock_model.learn.assert_called_once()
         assert mock_model.learn.call_args[0][0] == str(data)
 
-    def test_default_epochs_is_three(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_default_epochs_is_three(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         self._config(tmp_path)
         data = tmp_path / "train.jsonl"
@@ -344,11 +332,17 @@ class TestLearn:
         mock_model.snapshot.return_value = _make_snapshot("snap")
 
         with patch("pyrecall.model.Model", return_value=mock_model):
-            runner.invoke(app, [
-                "learn", str(data),
-                "--snapshot-before", "pre_train",
-                "--snapshot-after", "post_train",
-            ])
+            runner.invoke(
+                app,
+                [
+                    "learn",
+                    str(data),
+                    "--snapshot-before",
+                    "pre_train",
+                    "--snapshot-after",
+                    "post_train",
+                ],
+            )
 
         assert mock_model.snapshot.call_count == 2
         names_called = [c.kwargs.get("name") for c in mock_model.snapshot.call_args_list]
@@ -366,11 +360,17 @@ class TestLearn:
         mock_model.snapshot.return_value = _make_snapshot("snap")
 
         with patch("pyrecall.model.Model", return_value=mock_model):
-            runner.invoke(app, [
-                "learn", str(data),
-                "--snapshot-before", "pre_train",
-                "--snapshot-after", "post_train",
-            ])
+            runner.invoke(
+                app,
+                [
+                    "learn",
+                    str(data),
+                    "--snapshot-before",
+                    "pre_train",
+                    "--snapshot-after",
+                    "post_train",
+                ],
+            )
 
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
         assert config["baseline_snapshot"] == "post_train"
@@ -385,6 +385,7 @@ class TestLearn:
         mock_model = MagicMock()
 
         from pyrecall.model import PyrecallError
+
         mock_model.learn.side_effect = PyrecallError("bad format")
 
         with patch("pyrecall.model.Model", return_value=mock_model):
@@ -417,11 +418,16 @@ class TestLearn:
         mock_model.snapshot.return_value = _make_snapshot("after_v1")
 
         with patch("pyrecall.model.Model", return_value=mock_model):
-            result = runner.invoke(app, [
-                "learn", str(data),
-                "--snapshot-after", "after_v1",
-                "--no-update-baseline",
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "learn",
+                    str(data),
+                    "--snapshot-after",
+                    "after_v1",
+                    "--no-update-baseline",
+                ],
+            )
 
         assert result.exit_code == 0
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
@@ -438,11 +444,16 @@ class TestLearn:
         mock_model.snapshot.return_value = _make_snapshot("before_v1")
 
         with patch("pyrecall.model.Model", return_value=mock_model):
-            result = runner.invoke(app, [
-                "learn", str(data),
-                "--snapshot-before", "before_v1",
-                "--no-update-baseline",
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "learn",
+                    str(data),
+                    "--snapshot-before",
+                    "before_v1",
+                    "--no-update-baseline",
+                ],
+            )
 
         assert result.exit_code == 0
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
@@ -459,11 +470,16 @@ class TestLearn:
         mock_model.snapshot.return_value = _make_snapshot("after_v1")
 
         with patch("pyrecall.model.Model", return_value=mock_model):
-            runner.invoke(app, [
-                "learn", str(data),
-                "--snapshot-after", "after_v1",
-                "--no-update-baseline",
-            ])
+            runner.invoke(
+                app,
+                [
+                    "learn",
+                    str(data),
+                    "--snapshot-after",
+                    "after_v1",
+                    "--no-update-baseline",
+                ],
+            )
 
         mock_model.learn.assert_called_once()
         mock_model.snapshot.assert_called_once_with(name="after_v1", tracker=None)
@@ -650,15 +666,9 @@ class TestCheck:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
-        snap_a = _make_snapshot(
-            "first", created_at=datetime(2024, 1, 1)
-        )
-        snap_b = _make_snapshot(
-            "second", created_at=datetime(2024, 2, 1)
-        )
-        snap_c = _make_snapshot(
-            "third", created_at=datetime(2024, 3, 1)
-        )
+        snap_a = _make_snapshot("first", created_at=datetime(2024, 1, 1))
+        snap_b = _make_snapshot("second", created_at=datetime(2024, 2, 1))
+        snap_c = _make_snapshot("third", created_at=datetime(2024, 3, 1))
         # list_snapshots returns oldest-first; check should compare second and third
         mgr = _make_mock_manager(snapshots=[snap_a, snap_b, snap_c])
 
@@ -710,9 +720,7 @@ class TestCheck:
         )
 
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
-            result = runner.invoke(
-                app, ["check", "--before", "snap_a", "--after", "snap_b"]
-            )
+            result = runner.invoke(app, ["check", "--before", "snap_a", "--after", "snap_b"])
 
         mgr.load_snapshot.assert_any_call("snap_a")
         mgr.load_snapshot.assert_any_call("snap_b")
@@ -856,9 +864,7 @@ class TestRollback:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap = _make_snapshot("real_snap")
-        mgr = _make_mock_manager(
-            snapshots=[snap], snapshot_map={"real_snap": snap}
-        )
+        mgr = _make_mock_manager(snapshots=[snap], snapshot_map={"real_snap": snap})
 
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
             result = runner.invoke(app, ["rollback", "ghost"])
@@ -871,9 +877,7 @@ class TestRollback:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path, baseline="old_snap")
         snap = _make_snapshot("new_snap")
-        mgr = _make_mock_manager(
-            snapshots=[snap], snapshot_map={"new_snap": snap}
-        )
+        mgr = _make_mock_manager(snapshots=[snap], snapshot_map={"new_snap": snap})
 
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
             result = runner.invoke(app, ["rollback", "new_snap"])
@@ -882,15 +886,11 @@ class TestRollback:
         config = json.loads((tmp_path / _CONFIG_FILE).read_text())
         assert config["baseline_snapshot"] == "new_snap"
 
-    def test_success_exit_code_zero(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_success_exit_code_zero(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap = _make_snapshot("target")
-        mgr = _make_mock_manager(
-            snapshots=[snap], snapshot_map={"target": snap}
-        )
+        mgr = _make_mock_manager(snapshots=[snap], snapshot_map={"target": snap})
 
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
             result = runner.invoke(app, ["rollback", "target"])
@@ -903,24 +903,18 @@ class TestRollback:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap = _make_snapshot("v2")
-        mgr = _make_mock_manager(
-            snapshots=[snap], snapshot_map={"v2": snap}
-        )
+        mgr = _make_mock_manager(snapshots=[snap], snapshot_map={"v2": snap})
 
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
             result = runner.invoke(app, ["rollback", "v2"])
 
         assert "v2" in result.output
 
-    def test_old_baseline_replaced(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_old_baseline_replaced(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path, baseline="old")
         snap = _make_snapshot("new")
-        mgr = _make_mock_manager(
-            snapshots=[snap], snapshot_map={"new": snap}
-        )
+        mgr = _make_mock_manager(snapshots=[snap], snapshot_map={"new": snap})
 
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
             runner.invoke(app, ["rollback", "new"])
@@ -978,9 +972,7 @@ class TestDelete:
 
         mgr.delete_snapshot.assert_called_once_with("v1")
 
-    def test_success_exit_code_zero(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_success_exit_code_zero(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap = _make_snapshot("v1")
@@ -1023,12 +1015,11 @@ class TestReplayStatus:
         assert result.exit_code == 0
         assert "disabled" in result.output.lower()
 
-    def test_shows_model_name(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_shows_model_name(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config_with_replay(tmp_path)
         from unittest.mock import MagicMock
+
         mock_buf = MagicMock()
         mock_buf.__len__ = lambda self: 42
         mock_buf.total_seen = 100
@@ -1037,9 +1028,7 @@ class TestReplayStatus:
             result = runner.invoke(app, ["replay", "status"])
         assert "test/model" in result.output
 
-    def test_shows_fill_level(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_shows_fill_level(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config_with_replay(tmp_path)
         mock_buf = MagicMock()
@@ -1051,9 +1040,7 @@ class TestReplayStatus:
         assert "250" in result.output
         assert "500" in result.output
 
-    def test_empty_buffer_note(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_empty_buffer_note(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config_with_replay(tmp_path)
         mock_buf = MagicMock()
@@ -1165,9 +1152,7 @@ class TestReplayClear:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path, baseline="current_base")
         snap = _make_snapshot("current_base")
-        mgr = _make_mock_manager(
-            snapshots=[snap], snapshot_map={"current_base": snap}
-        )
+        mgr = _make_mock_manager(snapshots=[snap], snapshot_map={"current_base": snap})
 
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
             result = runner.invoke(app, ["delete", "current_base", "--yes"])
@@ -1205,7 +1190,7 @@ class TestReplayClear:
         mgr.delete_snapshot.assert_not_called()
         assert result.exit_code == 0
 
-    def test_short_flag_y_skips_prompt(
+    def test_delete_short_flag_y_skips_prompt(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.chdir(tmp_path)
@@ -1320,9 +1305,7 @@ class TestHistory:
         result = runner.invoke(app, ["history"])
         assert result.exit_code == 1
 
-    def test_no_snapshots_message(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_no_snapshots_message(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         mgr = _make_mock_manager(snapshots=[])
@@ -1342,9 +1325,7 @@ class TestHistory:
         assert result.exit_code == 0
         assert "at least two" in result.output.lower() or "one snapshot" in result.output.lower()
 
-    def test_shows_snapshot_names(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_shows_snapshot_names(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snaps = [_make_snapshot("before"), _make_snapshot("after")]
@@ -1354,9 +1335,7 @@ class TestHistory:
         assert "before" in result.output
         assert "after" in result.output
 
-    def test_shows_trend_arrows(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_shows_trend_arrows(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap_a = _make_snapshot("v1", {"coding": 0.90})
@@ -1379,9 +1358,7 @@ class TestHistory:
             result = runner.invoke(app, ["history"])
         assert "↑" in result.output
 
-    def test_category_filter(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_category_filter(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap_a = _make_snapshot("v1", {"coding": 0.8, "reasoning": 0.7})
@@ -1418,9 +1395,7 @@ class TestHistory:
         assert "v4" in result.output
         assert "v0" not in result.output
 
-    def test_summary_line_shown(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_summary_line_shown(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snap_a = _make_snapshot("first", {"coding": 0.8})
@@ -1454,9 +1429,7 @@ class TestExport:
         assert result.exit_code == 0
         assert "No snapshots" in result.output
 
-    def test_stdout_json_is_valid(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_stdout_json_is_valid(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snaps = [_make_snapshot("v1", {"coding": 0.8}), _make_snapshot("v2", {"coding": 0.75})]
@@ -1482,9 +1455,7 @@ class TestExport:
         assert "overall" in record
         assert "categories" in record
 
-    def test_export_json_to_file(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_export_json_to_file(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         mgr = _make_mock_manager(snapshots=[_make_snapshot("v1", {"coding": 0.8})])
@@ -1496,9 +1467,7 @@ class TestExport:
         parsed = json.loads(out.read_text())
         assert parsed[0]["name"] == "v1"
 
-    def test_export_csv_to_file(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    def test_export_csv_to_file(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
         snaps = [_make_snapshot("v1", {"coding": 0.8}), _make_snapshot("v2", {"coding": 0.75})]
@@ -1549,7 +1518,9 @@ class TestExport:
     ) -> None:
         monkeypatch.chdir(tmp_path)
         _write_config(tmp_path)
-        mgr = _make_mock_manager(snapshots=[_make_snapshot("v1", {"coding": 0.82, "reasoning": 0.77})])
+        mgr = _make_mock_manager(
+            snapshots=[_make_snapshot("v1", {"coding": 0.82, "reasoning": 0.77})]
+        )
         with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
             result = runner.invoke(app, ["export"])
         record = json.loads(result.output)[0]
@@ -1599,9 +1570,9 @@ class TestLive:
         with patch("pyrecall.cli._default_live_db", return_value=db):
             result = runner.invoke(app, ["live", "status"])
         assert result.exit_code == 0
-        assert "5" in result.output   # total
-        assert "3" in result.output   # pending
-        assert "2" in result.output   # trained
+        assert "5" in result.output  # total
+        assert "3" in result.output  # pending
+        assert "2" in result.output  # trained
 
     def test_clear_pending_only(self, tmp_path: Path) -> None:
         db = tmp_path / ".pyrecall" / "live_data.db"
@@ -1612,6 +1583,7 @@ class TestLive:
         assert "3" in result.output
 
         import sqlite3
+
         conn = sqlite3.connect(db)
         remaining = conn.execute("SELECT COUNT(*) FROM interactions").fetchone()[0]
         trained_remaining = conn.execute(
@@ -1629,6 +1601,7 @@ class TestLive:
         assert result.exit_code == 0
 
         import sqlite3
+
         conn = sqlite3.connect(db)
         remaining = conn.execute("SELECT COUNT(*) FROM interactions").fetchone()[0]
         conn.close()
@@ -1649,6 +1622,7 @@ class TestLive:
         assert "Aborted" in result.output
 
         import sqlite3
+
         conn = sqlite3.connect(db)
         remaining = conn.execute("SELECT COUNT(*) FROM interactions").fetchone()[0]
         conn.close()

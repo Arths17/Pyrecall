@@ -110,7 +110,9 @@ class ForgettingReport:
                     "score_after": round(c.score_after, 4),
                     "delta": round(c.delta, 4),
                     "pct_change": round(c.pct_change, 2),
-                    "status": "FORGOTTEN" if (c.score_before - c.score_after) > self.threshold else "OK",
+                    "status": "FORGOTTEN"
+                    if (c.score_before - c.score_after) > self.threshold
+                    else "OK",
                     "prompts": [p.to_dict() for p in self.prompts_for_category(c.category)],
                 }
                 for c in self.comparisons
@@ -150,8 +152,10 @@ class ForgettingReport:
             degraded = (comp.score_before - comp.score_after) > self.threshold
             sign = "+" if comp.delta >= 0 else ""
             delta_str = f"{sign}{comp.delta:.3f} ({sign}{comp.pct_change:.1f}%)"
-            delta_style = "red" if comp.delta < -self.threshold else (
-                "green" if comp.delta >= 0 else "yellow"
+            delta_style = (
+                "red"
+                if comp.delta < -self.threshold
+                else ("green" if comp.delta >= 0 else "yellow")
             )
             status_markup = "[red]FORGOTTEN[/red]" if degraded else "[green]  OK  [/green]"
 
@@ -180,8 +184,10 @@ class ForgettingReport:
             )
 
         if verbose and self.prompt_comparisons:
-            categories_to_show = self.degraded_skills if self.degraded_skills else sorted(
-                {p.category for p in self.prompt_comparisons}
+            categories_to_show = (
+                self.degraded_skills
+                if self.degraded_skills
+                else sorted({p.category for p in self.prompt_comparisons})
             )
             for cat in categories_to_show:
                 prompts = self.prompts_for_category(cat)
@@ -220,9 +226,7 @@ class ForgettingDetector:
     def __init__(self, threshold: float = 0.10) -> None:
         self.threshold = threshold
 
-    def compare(
-        self, before: SkillSnapshot, after: SkillSnapshot
-    ) -> ForgettingReport:
+    def compare(self, before: SkillSnapshot, after: SkillSnapshot) -> ForgettingReport:
         """
         Return a ForgettingReport comparing *before* and *after* snapshots.
 

@@ -15,7 +15,7 @@ Quick start::
         model.rollback(to="before_v1")
 """
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 from .detector import CategoryComparison, ForgettingDetector, ForgettingReport
 from .live import LiveLearner

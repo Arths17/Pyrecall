@@ -178,6 +178,7 @@ class TestMLflowTracker:
 class TestModelSnapshotTrackerIntegration:
     def _make_model(self, scores):
         from pyrecall.model import Model
+
         m = object.__new__(Model)
         m.model_name = "test/model"
         m.model = MagicMock()

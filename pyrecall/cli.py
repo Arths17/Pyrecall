@@ -7,7 +7,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -15,6 +15,7 @@ from rich.table import Table
 
 try:
     from importlib.metadata import version as _pkg_version
+
     _VERSION = _pkg_version("pyrecall")
 except Exception:
     _VERSION = "unknown"
@@ -64,8 +65,14 @@ app.add_typer(live_app, name="live")
 @app.callback()
 def _main(
     version: Annotated[
-        Optional[bool],
-        typer.Option("--version", "-V", callback=_version_callback, is_eager=True, help="Show version and exit"),
+        bool | None,
+        typer.Option(
+            "--version",
+            "-V",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show version and exit",
+        ),
     ] = None,
 ) -> None:
     pass
@@ -108,12 +115,14 @@ def _build_rollback_manager(config: dict):
 
 
 def _build_trackers(log_wandb: bool, log_mlflow: bool):
-    trackers = []
+    trackers: list = []
     if log_wandb:
         from pyrecall.trackers import WandbTracker
+
         trackers.append(WandbTracker())
     if log_mlflow:
         from pyrecall.trackers import MLflowTracker
+
         trackers.append(MLflowTracker())
     return trackers if trackers else None
 
@@ -161,11 +170,16 @@ def init(
     ] = 0.10,
     replay_buffer_size: Annotated[
         int,
-        typer.Option("--replay-buffer-size", help="Max past examples stored for replay (0 = disabled)"),
+        typer.Option(
+            "--replay-buffer-size", help="Max past examples stored for replay (0 = disabled)"
+        ),
     ] = 500,
     replay_mix_ratio: Annotated[
         float,
-        typer.Option("--replay-mix-ratio", help="Fraction of each training batch filled with replayed examples (0–1)"),
+        typer.Option(
+            "--replay-mix-ratio",
+            help="Fraction of each training batch filled with replayed examples (0–1)",
+        ),
     ] = 0.3,
 ) -> None:
     """Initialise pyrecall in the current project directory."""
@@ -200,8 +214,7 @@ def init(
     cfg_path = Path(_CONFIG_FILE)
     if cfg_path.exists():
         console.print(
-            f"[yellow]⚠  {_CONFIG_FILE} already exists.[/yellow] "
-            "Delete it first to reinitialise."
+            f"[yellow]⚠  {_CONFIG_FILE} already exists.[/yellow] Delete it first to reinitialise."
         )
         raise typer.Exit(1)
 
@@ -234,47 +247,66 @@ def init(
 def learn(
     data: Annotated[
         str,
-        typer.Argument(help="Path to training data (.jsonl, .csv, or .parquet). Each row needs a 'text' column."),
+        typer.Argument(
+            help="Path to training data (.jsonl, .csv, or .parquet). Each row needs a 'text' column."
+        ),
     ],
     epochs: Annotated[
         int,
         typer.Option("--epochs", "-e", help="Number of full passes over the training data"),
     ] = 3,
     batch_size: Annotated[
-        Optional[int],
-        typer.Option("--batch-size", help="Per-device training batch size (overrides init setting)"),
+        int | None,
+        typer.Option(
+            "--batch-size", help="Per-device training batch size (overrides init setting)"
+        ),
     ] = None,
     learning_rate: Annotated[
-        Optional[float],
+        float | None,
         typer.Option("--learning-rate", help="AdamW learning rate (overrides init setting)"),
     ] = None,
     max_length: Annotated[
-        Optional[int],
-        typer.Option("--max-length", help="Tokenisation truncation length (overrides init setting)"),
+        int | None,
+        typer.Option(
+            "--max-length", help="Tokenisation truncation length (overrides init setting)"
+        ),
     ] = None,
     resume: Annotated[
         bool,
-        typer.Option("--resume", help="Resume from the latest checkpoint if a previous run was interrupted"),
+        typer.Option(
+            "--resume", help="Resume from the latest checkpoint if a previous run was interrupted"
+        ),
     ] = False,
     snapshot_before: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--snapshot-before", help="Take a named snapshot before training begins"),
     ] = None,
     snapshot_after: Annotated[
-        Optional[str],
-        typer.Option("--snapshot-after", help="Take a named snapshot immediately after training completes"),
+        str | None,
+        typer.Option(
+            "--snapshot-after", help="Take a named snapshot immediately after training completes"
+        ),
     ] = None,
     no_update_baseline: Annotated[
         bool,
-        typer.Option("--no-update-baseline", help="Do not update baseline_snapshot in .pyrecall.json after snapshotting"),
+        typer.Option(
+            "--no-update-baseline",
+            help="Do not update baseline_snapshot in .pyrecall.json after snapshotting",
+        ),
     ] = False,
     log_wandb: Annotated[
         bool,
-        typer.Option("--log-wandb", help="Log snapshot scores to Weights & Biases (requires pip install pyrecall[wandb])"),
+        typer.Option(
+            "--log-wandb",
+            help="Log snapshot scores to Weights & Biases (requires pip install pyrecall[wandb])",
+        ),
     ] = False,
     log_mlflow: Annotated[
         bool,
-        typer.Option("--log-mlflow", help="Log snapshot scores to MLflow (requires pip install pyrecall[mlflow])"),
+        typer.Option(
+            "--log-mlflow",
+            help="Log snapshot scores to MLflow (requires pip install pyrecall[mlflow])",
+        ),
     ] = False,
 ) -> None:
     """
@@ -354,15 +386,22 @@ def snapshot(
     name: Annotated[str, typer.Argument(help="Name for this snapshot, e.g. 'before_v2'")],
     no_update_baseline: Annotated[
         bool,
-        typer.Option("--no-update-baseline", help="Do not update baseline_snapshot in .pyrecall.json"),
+        typer.Option(
+            "--no-update-baseline", help="Do not update baseline_snapshot in .pyrecall.json"
+        ),
     ] = False,
     log_wandb: Annotated[
         bool,
-        typer.Option("--log-wandb", help="Log scores to Weights & Biases (requires pip install pyrecall[wandb])"),
+        typer.Option(
+            "--log-wandb",
+            help="Log scores to Weights & Biases (requires pip install pyrecall[wandb])",
+        ),
     ] = False,
     log_mlflow: Annotated[
         bool,
-        typer.Option("--log-mlflow", help="Log scores to MLflow (requires pip install pyrecall[mlflow])"),
+        typer.Option(
+            "--log-mlflow", help="Log scores to MLflow (requires pip install pyrecall[mlflow])"
+        ),
     ] = False,
 ) -> None:
     """
@@ -406,24 +445,32 @@ def snapshot(
 @app.command()
 def check(
     before: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--before", help="Snapshot name to use as baseline"),
     ] = None,
     after: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--after", help="Snapshot name to compare against"),
     ] = None,
     threshold: Annotated[
-        Optional[float],
-        typer.Option("--threshold", help="Override the forgetting threshold (0–1). Defaults to the value set in pyrecall init."),
+        float | None,
+        typer.Option(
+            "--threshold",
+            help="Override the forgetting threshold (0–1). Defaults to the value set in pyrecall init.",
+        ),
     ] = None,
     json_output: Annotated[
         bool,
-        typer.Option("--json", help="Output results as JSON instead of a rich table. Useful for CI pipelines and dashboards."),
+        typer.Option(
+            "--json",
+            help="Output results as JSON instead of a rich table. Useful for CI pipelines and dashboards.",
+        ),
     ] = False,
     verbose: Annotated[
         bool,
-        typer.Option("--verbose", "-v", help="Show per-prompt score breakdown for each degraded skill."),
+        typer.Option(
+            "--verbose", "-v", help="Show per-prompt score breakdown for each degraded skill."
+        ),
     ] = False,
 ) -> None:
     """
@@ -458,9 +505,7 @@ def check(
         snap_after = all_snaps[-1]
     else:
         if before is None or after is None:
-            console.print(
-                "[red]Error:[/red] Provide both --before and --after, or neither."
-            )
+            console.print("[red]Error:[/red] Provide both --before and --after, or neither.")
             raise typer.Exit(1)
         try:
             snap_before = mgr.load_snapshot(before)
@@ -475,7 +520,9 @@ def check(
 
     from pyrecall.detector import ForgettingDetector
 
-    effective_threshold = threshold if threshold is not None else config.get("forgetting_threshold", 0.10)
+    effective_threshold = (
+        threshold if threshold is not None else config.get("forgetting_threshold", 0.10)
+    )
     if not 0.0 < effective_threshold <= 1.0:
         console.print(
             f"[red]Error:[/red] threshold must be between 0 and 1, got {effective_threshold}."
@@ -495,9 +542,7 @@ def check(
 
 @app.command()
 def rollback(
-    snapshot_name: Annotated[
-        str, typer.Argument(help="Snapshot to roll back to")
-    ],
+    snapshot_name: Annotated[str, typer.Argument(help="Snapshot to roll back to")],
 ) -> None:
     """
     Update the project config to point at a previous snapshot.
@@ -514,8 +559,7 @@ def rollback(
     if not mgr.has_snapshot(snapshot_name):
         available = [s.name for s in mgr.list_snapshots()]
         console.print(
-            f"[red]Error:[/red] Snapshot '{snapshot_name}' not found.\n"
-            f"Available: {available}"
+            f"[red]Error:[/red] Snapshot '{snapshot_name}' not found.\nAvailable: {available}"
         )
         raise typer.Exit(1)
 
@@ -524,19 +568,14 @@ def rollback(
     _write_config(config)
 
     console.print(
-        f"[green]✓ Baseline updated[/green]: "
-        f"'{old_baseline}' → '[bold]{snapshot_name}[/bold]'"
+        f"[green]✓ Baseline updated[/green]: '{old_baseline}' → '[bold]{snapshot_name}[/bold]'"
     )
-    console.print(
-        f"[dim]  To apply in Python: model.rollback(to='{snapshot_name}')[/dim]"
-    )
+    console.print(f"[dim]  To apply in Python: model.rollback(to='{snapshot_name}')[/dim]")
 
 
 @app.command()
 def delete(
-    snapshot_name: Annotated[
-        str, typer.Argument(help="Snapshot to permanently delete")
-    ],
+    snapshot_name: Annotated[str, typer.Argument(help="Snapshot to permanently delete")],
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompt"),
@@ -638,7 +677,7 @@ def status() -> None:
 @app.command()
 def history(
     category: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--category", "-c", help="Show trend for a single category only"),
     ] = None,
     last: Annotated[
@@ -683,8 +722,7 @@ def history(
     if category:
         if category not in all_categories:
             console.print(
-                f"[red]Error:[/red] Category '{category}' not found. "
-                f"Available: {all_categories}"
+                f"[red]Error:[/red] Category '{category}' not found. Available: {all_categories}"
             )
             raise typer.Exit(1)
         display_categories = [category]
@@ -721,9 +759,7 @@ def history(
             overall_str += f" {_trend(prev_overall, snap.overall_score())}"
 
         name_markup = (
-            f"[bold green]{snap.name} ★[/bold green]"
-            if snap.name == baseline
-            else snap.name
+            f"[bold green]{snap.name} ★[/bold green]" if snap.name == baseline else snap.name
         )
 
         row: list[str] = [
@@ -746,7 +782,13 @@ def history(
     first_overall = snaps[0].overall_score()
     last_overall = snaps[-1].overall_score()
     delta = last_overall - first_overall
-    direction = "[green]improved[/green]" if delta > 0 else "[red]dropped[/red]" if delta < 0 else "unchanged"
+    direction = (
+        "[green]improved[/green]"
+        if delta > 0
+        else "[red]dropped[/red]"
+        if delta < 0
+        else "unchanged"
+    )
     console.print(
         f"\n  Overall score {direction} by [bold]{abs(delta):.3f}[/bold] "
         f"across {len(snaps)} snapshots "
@@ -771,7 +813,9 @@ def replay_status() -> None:
 
     if max_size == 0:
         console.print("[yellow]Replay buffer is disabled[/yellow] (replay_buffer_size = 0).")
-        console.print("Re-run [bold]pyrecall init[/bold] with [bold]--replay-buffer-size > 0[/bold] to enable it.")
+        console.print(
+            "Re-run [bold]pyrecall init[/bold] with [bold]--replay-buffer-size > 0[/bold] to enable it."
+        )
         return
 
     buf = ReplayBuffer(model_name, max_size=max_size)
@@ -828,12 +872,16 @@ def replay_clear(
 @app.command()
 def export(
     output: Annotated[
-        Optional[str],
+        str | None,
         typer.Argument(help="Output file path (.csv or .json). Omit to print JSON to stdout."),
     ] = None,
     fmt: Annotated[
-        Optional[str],
-        typer.Option("--format", "-f", help="Force output format: 'csv' or 'json'. Auto-detected from file extension when omitted."),
+        str | None,
+        typer.Option(
+            "--format",
+            "-f",
+            help="Force output format: 'csv' or 'json'. Auto-detected from file extension when omitted.",
+        ),
     ] = None,
 ) -> None:
     """
@@ -882,9 +930,7 @@ def export(
             resolved_fmt = "json"
 
     if resolved_fmt not in ("csv", "json"):
-        console.print(
-            f"[red]Error:[/red] Unknown format '{resolved_fmt}'. Use 'csv' or 'json'."
-        )
+        console.print(f"[red]Error:[/red] Unknown format '{resolved_fmt}'. Use 'csv' or 'json'.")
         raise typer.Exit(1)
 
     if resolved_fmt == "json":
@@ -894,8 +940,7 @@ def export(
                 "created_at": snap.created_at.isoformat(),
                 "overall": round(snap.overall_score(), 4),
                 "categories": {
-                    cat: round(score, 4)
-                    for cat, score in snap.category_scores().items()
+                    cat: round(score, 4) for cat, score in snap.category_scores().items()
                 },
             }
             for snap in all_snaps
@@ -903,7 +948,9 @@ def export(
         payload = json.dumps(records, indent=2)
         if output:
             Path(output).write_text(payload)
-            console.print(f"[green]✓ Exported {len(all_snaps)} snapshots to[/green] [bold]{output}[/bold]")
+            console.print(
+                f"[green]✓ Exported {len(all_snaps)} snapshots to[/green] [bold]{output}[/bold]"
+            )
         else:
             sys.stdout.write(payload + "\n")
 
@@ -932,7 +979,9 @@ def export(
                 writer = csv.DictWriter(fh, fieldnames=fieldnames)
                 writer.writeheader()
                 writer.writerows(rows)
-            console.print(f"[green]✓ Exported {len(all_snaps)} snapshots to[/green] [bold]{output}[/bold]")
+            console.print(
+                f"[green]✓ Exported {len(all_snaps)} snapshots to[/green] [bold]{output}[/bold]"
+            )
         else:
             writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
             writer.writeheader()
@@ -1001,7 +1050,10 @@ def live_status() -> None:
 def live_clear(
     all_: Annotated[
         bool,
-        typer.Option("--all", help="Delete ALL interactions including already-trained ones (default: pending only)"),
+        typer.Option(
+            "--all",
+            help="Delete ALL interactions including already-trained ones (default: pending only)",
+        ),
     ] = False,
     yes: Annotated[
         bool,
@@ -1028,9 +1080,9 @@ def live_clear(
         if all_:
             count = conn.execute("SELECT COUNT(*) FROM interactions").fetchone()[0]
         else:
-            count = conn.execute(
-                "SELECT COUNT(*) FROM interactions WHERE trained = 0"
-            ).fetchone()[0]
+            count = conn.execute("SELECT COUNT(*) FROM interactions WHERE trained = 0").fetchone()[
+                0
+            ]
     finally:
         conn.close()
 

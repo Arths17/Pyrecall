@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import torch
-from datasets import Dataset as _HFDataset, concatenate_datasets, load_dataset
+from datasets import Dataset as _HFDataset
+from datasets import concatenate_datasets, load_dataset
 from peft import LoraConfig, PeftModel, TaskType, get_peft_model, prepare_model_for_kbit_training
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from transformers import (
@@ -81,8 +82,8 @@ class Model:
         lora_r: int = 16,
         lora_alpha: int = 32,
         lora_dropout: float = 0.1,
-        device: Optional[str] = None,
-        snapshot_dir: Optional[Path] = None,
+        device: str | None = None,
+        snapshot_dir: Path | None = None,
         forgetting_threshold: float = 0.10,
         load_in_4bit: bool = False,
         load_in_8bit: bool = False,
@@ -129,11 +130,10 @@ class Model:
         self.max_length = max_length
         self._replay_mix_ratio = replay_mix_ratio
 
-        self._baseline_snapshot_name: Optional[str] = None
+        self._baseline_snapshot_name: str | None = None
 
-        self.replay_buffer: Optional[ReplayBuffer] = (
-            ReplayBuffer(model_name=model_name, max_size=replay_buffer_size,
-                         base_dir=snapshot_dir)
+        self.replay_buffer: ReplayBuffer | None = (
+            ReplayBuffer(model_name=model_name, max_size=replay_buffer_size, base_dir=snapshot_dir)
             if replay_buffer_size > 0
             else None
         )
@@ -182,14 +182,12 @@ class Model:
             target_modules=target_modules,
             bias="none",
         )
-        self.model: PeftModel = get_peft_model(base, lora_cfg)
+        self.model: Any = get_peft_model(base, lora_cfg)
         if not bnb_config:
             self.model = self.model.to(self.device)
         self.model.eval()
 
-        self.rollback_manager = RollbackManager(
-            model_name=model_name, base_dir=snapshot_dir
-        )
+        self.rollback_manager = RollbackManager(model_name=model_name, base_dir=snapshot_dir)
         self.detector = ForgettingDetector(threshold=forgetting_threshold)
 
         n_trainable = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
@@ -205,7 +203,7 @@ class Model:
     def snapshot(
         self,
         name: str,
-        tracker: "SnapshotTracker | list[SnapshotTracker] | None" = None,
+        tracker: SnapshotTracker | list[SnapshotTracker] | None = None,
     ) -> SkillSnapshot:
         """
         Benchmark the model and save a named capability snapshot.
@@ -250,9 +248,9 @@ class Model:
         self,
         data_path: str,
         epochs: int = 3,
-        batch_size: Optional[int] = None,
-        learning_rate: Optional[float] = None,
-        max_length: Optional[int] = None,
+        batch_size: int | None = None,
+        learning_rate: float | None = None,
+        max_length: int | None = None,
         resume: bool = False,
     ) -> None:
         """
@@ -293,8 +291,7 @@ class Model:
         fmt = _FORMAT_MAP.get(data_file.suffix.lower())
         if fmt is None:
             raise PyrecallError(
-                f"Unsupported file format '{data_file.suffix}'. "
-                "Use .jsonl, .csv, or .parquet."
+                f"Unsupported file format '{data_file.suffix}'. Use .jsonl, .csv, or .parquet."
             )
 
         dataset = load_dataset(fmt, data_files=str(data_file), split="train")
@@ -368,7 +365,9 @@ class Model:
         # Find latest checkpoint when resuming
         resume_from = None
         if resume:
-            checkpoints = sorted(run_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[-1]))
+            checkpoints = sorted(
+                run_dir.glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[-1])
+            )
             if checkpoints:
                 resume_from = str(checkpoints[-1])
                 console.print(f"[info]Resuming from checkpoint '{checkpoints[-1].name}'…[/info]")
@@ -411,9 +410,7 @@ class Model:
         console.print("[info]Running post-training benchmarks…[/info]")
         after_scores = self._run_benchmarks()
         after_name = f"{self._baseline_snapshot_name}__after"
-        after = SkillSnapshot(
-            name=after_name, model_name=self.model_name, scores=after_scores
-        )
+        after = SkillSnapshot(name=after_name, model_name=self.model_name, scores=after_scores)
         after.save(self.rollback_manager.base_dir / after_name)
 
         report = self.detector.compare(before, after)
@@ -477,8 +474,8 @@ class Model:
                 pad_token_id=self.tokenizer.eos_token_id,
             )
 
-        new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
-        return self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        new_tokens = output_ids[0][inputs["input_ids"].shape[1] :]
+        return self.tokenizer.decode(new_tokens, skip_special_tokens=True)  # type: ignore[return-value]
 
     def serve(
         self,
@@ -530,6 +527,7 @@ class Model:
         learner = None
         if live_learning:
             from .live import LiveLearner
+
             learner = LiveLearner(self, batch_size=live_batch_size)
             console.print(
                 "[info]Live learning enabled — interactions will be collected "
@@ -582,16 +580,12 @@ class Model:
             console=console,
             transient=True,
         ) as progress:
-            task = progress.add_task(
-                "Running benchmarks…", total=len(DEFAULT_BENCHMARKS)
-            )
+            task = progress.add_task("Running benchmarks…", total=len(DEFAULT_BENCHMARKS))
 
             for bench in DEFAULT_BENCHMARKS:
                 progress.update(
                     task,
-                    description=(
-                        f"[{bench.category}] {bench.prompt[:55].rstrip()}…"
-                    ),
+                    description=(f"[{bench.category}] {bench.prompt[:55].rstrip()}…"),
                 )
 
                 response = self.generate(bench.prompt)
@@ -599,10 +593,16 @@ class Model:
                     response = "[no response]"
 
                 resp_emb = compute_embeddings(
-                    self.model, self.tokenizer, response, device=self.device
+                    self.model,
+                    self.tokenizer,
+                    response,
+                    device=self.device,  # type: ignore[arg-type]
                 )
                 ref_emb = compute_embeddings(
-                    self.model, self.tokenizer, bench.reference_answer, device=self.device
+                    self.model,
+                    self.tokenizer,
+                    bench.reference_answer,
+                    device=self.device,  # type: ignore[arg-type]
                 )
 
                 # Shift cosine similarity from [-1, 1] → [0, 1]

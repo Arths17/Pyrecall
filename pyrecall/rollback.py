@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from .snapshot import SkillSnapshot
-from .utils import safe_model_name, get_logger
+from .utils import get_logger, safe_model_name
 
 if TYPE_CHECKING:
     from peft import PeftModel
@@ -31,7 +31,7 @@ class RollbackManager:
     def __init__(
         self,
         model_name: str,
-        base_dir: Optional[Path] = None,
+        base_dir: Path | None = None,
     ) -> None:
         self.model_name = model_name
         self.base_dir: Path = (
@@ -43,7 +43,7 @@ class RollbackManager:
 
     # ── saving ─────────────────────────────────────────────────────────────────
 
-    def save(self, snapshot: SkillSnapshot, peft_model: "PeftModel") -> Path:
+    def save(self, snapshot: SkillSnapshot, peft_model: PeftModel) -> Path:
         """
         Persist *snapshot* scores and the *peft_model* adapter weights to disk.
 
@@ -75,9 +75,7 @@ class RollbackManager:
         if not snap_dir.exists():
             available = self._available_names()
             hint = f" Available snapshots: {available}" if available else " No snapshots saved yet."
-            raise FileNotFoundError(
-                f"Snapshot '{name}' not found under '{self.base_dir}'.{hint}"
-            )
+            raise FileNotFoundError(f"Snapshot '{name}' not found under '{self.base_dir}'.{hint}")
         return SkillSnapshot.load(snap_dir)
 
     def list_snapshots(self) -> list[SkillSnapshot]:
@@ -97,9 +95,7 @@ class RollbackManager:
         """Permanently delete a snapshot and its adapter weights."""
         snap_dir = self.base_dir / name
         if not snap_dir.exists():
-            raise FileNotFoundError(
-                f"Cannot delete: snapshot '{name}' not found."
-            )
+            raise FileNotFoundError(f"Cannot delete: snapshot '{name}' not found.")
         shutil.rmtree(snap_dir)
         logger.debug("Deleted snapshot '%s'", name)
 

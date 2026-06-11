@@ -8,9 +8,9 @@ import tempfile
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
-from .utils import get_logger, console
+from .utils import console, get_logger
 
 if TYPE_CHECKING:
     from .model import Model
@@ -45,9 +45,9 @@ class LiveLearner:
 
     def __init__(
         self,
-        model: "Model",
+        model: Model,
         batch_size: int = 50,
-        db_path: Optional[Path] = None,
+        db_path: Path | None = None,
         min_response_length: int = 10,
     ) -> None:
         self.model = model
@@ -55,7 +55,7 @@ class LiveLearner:
         self.db_path: Path = db_path or Path.home() / ".pyrecall" / "live_data.db"
         self.min_response_length = min_response_length
         self._training_lock = threading.Lock()
-        self._training_thread: Optional[threading.Thread] = None
+        self._training_thread: threading.Thread | None = None
         self._init_db()
 
     # ── public API ─────────────────────────────────────────────────────────────
@@ -82,9 +82,7 @@ class LiveLearner:
     def pending_count(self) -> int:
         """Number of interactions not yet used for training."""
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM interactions WHERE trained = 0"
-            ).fetchone()
+            row = conn.execute("SELECT COUNT(*) FROM interactions WHERE trained = 0").fetchone()
         return row[0]
 
     def total_count(self) -> int:
@@ -141,21 +139,14 @@ class LiveLearner:
         if not rows:
             return
 
-        console.print(
-            f"[info]LiveLearner: training on {len(rows)} new interactions…[/info]"
-        )
+        console.print(f"[info]LiveLearner: training on {len(rows)} new interactions…[/info]")
 
-        tmp_path: Optional[Path] = None
+        tmp_path: Path | None = None
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".jsonl", delete=False
-            ) as fh:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as fh:
                 for row in rows:
                     entry = {
-                        "text": (
-                            f"### Human: {row['prompt']}\n\n"
-                            f"### Assistant: {row['response']}"
-                        )
+                        "text": (f"### Human: {row['prompt']}\n\n### Assistant: {row['response']}")
                     }
                     fh.write(json.dumps(entry) + "\n")
                 tmp_path = Path(fh.name)
@@ -164,9 +155,7 @@ class LiveLearner:
 
             row_ids = [(row["id"],) for row in rows]
             with self._connect() as conn:
-                conn.executemany(
-                    "UPDATE interactions SET trained = 1 WHERE id = ?", row_ids
-                )
+                conn.executemany("UPDATE interactions SET trained = 1 WHERE id = ?", row_ids)
 
             console.print(
                 f"[success]✓ LiveLearner: fine-tuned on {len(rows)} interactions.[/success]"

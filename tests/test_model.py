@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
-
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -106,7 +104,7 @@ class TestModelInit:
             patch("pyrecall.model.AutoModelForCausalLM.from_pretrained", return_value=mock_base),
             patch("pyrecall.model.get_peft_model", return_value=mock_peft),
         ):
-            from pyrecall.model import PyrecallError, Model
+            from pyrecall.model import Model, PyrecallError
 
             with pytest.raises(PyrecallError, match="strategy"):
                 Model("test/model", strategy="full", snapshot_dir=tmp_snapshot_dir)
@@ -128,7 +126,7 @@ class TestModelGenerate:
 
 class TestModelSnapshot:
     def test_snapshot_saves_json(self, patched_model, tmp_snapshot_dir: Path) -> None:
-        snap = patched_model.snapshot(name="test_snap")
+        patched_model.snapshot(name="test_snap")
         snap_file = tmp_snapshot_dir / "test_snap" / "snapshot.json"
         assert snap_file.exists(), "snapshot.json must be written to disk"
 
@@ -167,7 +165,7 @@ class TestModelCheck:
             patch("pyrecall.model.compute_embeddings", return_value=torch.randn(32)),
             patch("pyrecall.model.cosine_similarity", return_value=0.75),
         ):
-            from pyrecall.model import PyrecallError, Model
+            from pyrecall.model import Model, PyrecallError
 
             m = Model("test/model", snapshot_dir=tmp_snapshot_dir)
             with pytest.raises(PyrecallError, match="snapshot"):
@@ -284,13 +282,9 @@ class TestModelLearn:
         with pytest.raises(PyrecallError, match="not found"):
             patched_model.learn("/nonexistent/data.jsonl")
 
-    def test_learn_runs_with_valid_jsonl(
-        self, patched_model, tmp_path: Path
-    ) -> None:
+    def test_learn_runs_with_valid_jsonl(self, patched_model, tmp_path: Path) -> None:
         data_file = tmp_path / "train.jsonl"
-        data_file.write_text(
-            json.dumps({"text": "### Human: Hi\n\n### Assistant: Hello!"}) + "\n"
-        )
+        data_file.write_text(json.dumps({"text": "### Human: Hi\n\n### Assistant: Hello!"}) + "\n")
 
         mock_trainer = MagicMock()
         mock_trainer.train = MagicMock()
@@ -394,7 +388,7 @@ class TestQLoRA:
             patch("pyrecall.model.get_peft_model", return_value=mock_peft),
             patch("pyrecall.model.BitsAndBytesConfig"),
         ):
-            from pyrecall.model import PyrecallError, Model
+            from pyrecall.model import Model, PyrecallError
 
             with pytest.raises(PyrecallError, match="Cannot use load_in_4bit and load_in_8bit"):
                 Model(
@@ -462,16 +456,14 @@ class TestQLoRA:
             patch("pyrecall.model.AutoModelForCausalLM.from_pretrained", return_value=mock_base),
             patch("pyrecall.model.get_peft_model", return_value=mock_peft),
         ):
-            from pyrecall.model import PyrecallError, Model
+            from pyrecall.model import Model, PyrecallError
 
             with pytest.raises(PyrecallError, match="strategy"):
                 Model("test/model", strategy="full", snapshot_dir=tmp_snapshot_dir)
 
 
 class TestResumeTraining:
-    def test_resume_true_with_checkpoint_passes_path(
-        self, patched_model, tmp_path: Path
-    ) -> None:
+    def test_resume_true_with_checkpoint_passes_path(self, patched_model, tmp_path: Path) -> None:
         data_file = tmp_path / "train.jsonl"
         data_file.write_text(json.dumps({"text": "hi"}) + "\n")
 
@@ -499,9 +491,7 @@ class TestResumeTraining:
         # Cleanup
         checkpoint.rmdir()
 
-    def test_resume_true_no_checkpoint_starts_fresh(
-        self, patched_model, tmp_path: Path
-    ) -> None:
+    def test_resume_true_no_checkpoint_starts_fresh(self, patched_model, tmp_path: Path) -> None:
         data_file = tmp_path / "train.jsonl"
         data_file.write_text(json.dumps({"text": "hi"}) + "\n")
 
@@ -522,9 +512,7 @@ class TestResumeTraining:
             call_kwargs = mock_trainer.train.call_args
             assert call_kwargs.kwargs.get("resume_from_checkpoint") is None
 
-    def test_resume_false_never_passes_checkpoint(
-        self, patched_model, tmp_path: Path
-    ) -> None:
+    def test_resume_false_never_passes_checkpoint(self, patched_model, tmp_path: Path) -> None:
         data_file = tmp_path / "train.jsonl"
         data_file.write_text(json.dumps({"text": "hi"}) + "\n")
 

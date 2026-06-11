@@ -1,3 +1,3 @@
-from .default import Benchmark, DEFAULT_BENCHMARKS, CATEGORIES
+from .default import CATEGORIES, DEFAULT_BENCHMARKS, Benchmark
 
 __all__ = ["Benchmark", "DEFAULT_BENCHMARKS", "CATEGORIES"]

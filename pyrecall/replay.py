@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 import random
 from pathlib import Path
-from typing import Optional
 
-from .utils import console, get_logger, safe_model_name
+from .utils import get_logger, safe_model_name
 
 logger = get_logger(__name__)
 
@@ -34,7 +33,7 @@ class ReplayBuffer:
         self,
         model_name: str,
         max_size: int = 500,
-        base_dir: Optional[Path] = None,
+        base_dir: Path | None = None,
     ) -> None:
         self._max_size = max_size
         self._buffer: list[str] = []
@@ -102,7 +101,7 @@ class ReplayBuffer:
                 return
             meta = json.loads(lines[0])
             self._total_seen = meta.get("total_seen", 0)
-            self._buffer = [json.loads(l)["text"] for l in lines[1:] if l.strip()]
+            self._buffer = [json.loads(line)["text"] for line in lines[1:] if line.strip()]
             # Trim to current max_size in case the config changed.
             if len(self._buffer) > self._max_size:
                 self._buffer = self._buffer[: self._max_size]

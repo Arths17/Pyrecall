@@ -6,7 +6,6 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 
 @dataclass
@@ -27,7 +26,7 @@ class SkillScore:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SkillScore":
+    def from_dict(cls, data: dict) -> SkillScore:
         return cls(
             category=data["category"],
             prompt=data["prompt"],
@@ -49,7 +48,7 @@ class SkillSnapshot:
     model_name: str
     created_at: datetime = field(default_factory=datetime.now)
     scores: list[SkillScore] = field(default_factory=list)
-    adapter_path: Optional[Path] = None
+    adapter_path: Path | None = None
     encrypted: bool = False
 
     # ── aggregation ────────────────────────────────────────────────────────────
@@ -81,6 +80,7 @@ class SkillSnapshot:
             }
         else:
             from .encrypt import Encryptor
+
             encryptor = Encryptor()
             data = {
                 "encrypted": True,
@@ -96,7 +96,7 @@ class SkillSnapshot:
         (directory / "snapshot.json").write_text(json.dumps(data, indent=2))
 
     @classmethod
-    def load(cls, directory: Path, privacy: bool = False) -> "SkillSnapshot":
+    def load(cls, directory: Path, privacy: bool = False) -> SkillSnapshot:
         """Load a snapshot from *directory*/snapshot.json."""
         snapshot_file = directory / "snapshot.json"
         if not snapshot_file.exists():
@@ -112,19 +112,17 @@ class SkillSnapshot:
             ) from exc
         if privacy:
             from .encrypt import Encryptor
+
             encryptor = Encryptor(key=data["key"].encode())
             return cls(
                 name=encryptor.decrypt(data["name"]),
                 model_name=encryptor.decrypt(data["model_name"]),
                 created_at=datetime.fromisoformat(encryptor.decrypt(data["created_at"])),
                 scores=[
-                    SkillScore.from_dict(s)
-                    for s in json.loads(encryptor.decrypt(data["scores"]))
+                    SkillScore.from_dict(s) for s in json.loads(encryptor.decrypt(data["scores"]))
                 ],
                 adapter_path=(
-                    Path(encryptor.decrypt(data["adapter_path"]))
-                    if data["adapter_path"]
-                    else None
+                    Path(encryptor.decrypt(data["adapter_path"])) if data["adapter_path"] else None
                 ),
                 encrypted=True,
             )

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 class SnapshotTracker(Protocol):
     """Protocol that any tracker must satisfy."""
 
-    def log_snapshot(self, snapshot: "SkillSnapshot") -> None: ...
+    def log_snapshot(self, snapshot: SkillSnapshot) -> None: ...
 
 
 class WandbTracker:
@@ -41,7 +41,7 @@ class WandbTracker:
         self.project = project
         self._init_kwargs = wandb_init_kwargs
 
-    def log_snapshot(self, snapshot: "SkillSnapshot") -> None:
+    def log_snapshot(self, snapshot: SkillSnapshot) -> None:
         try:
             import wandb
         except ImportError as exc:
@@ -50,8 +50,7 @@ class WandbTracker:
             ) from exc
 
         metrics: dict[str, float] = {
-            f"pyrecall/{cat}": score
-            for cat, score in snapshot.category_scores().items()
+            f"pyrecall/{cat}": score for cat, score in snapshot.category_scores().items()
         }
         metrics["pyrecall/overall"] = snapshot.overall_score()
 
@@ -96,7 +95,7 @@ class MLflowTracker:
         self.experiment_name = experiment_name
         self.tracking_uri = tracking_uri
 
-    def log_snapshot(self, snapshot: "SkillSnapshot") -> None:
+    def log_snapshot(self, snapshot: SkillSnapshot) -> None:
         try:
             import mlflow
         except ImportError as exc:
@@ -111,8 +110,7 @@ class MLflowTracker:
 
         with mlflow.start_run(run_name=snapshot.name):
             metrics: dict[str, float] = {
-                f"pyrecall.{cat}": score
-                for cat, score in snapshot.category_scores().items()
+                f"pyrecall.{cat}": score for cat, score in snapshot.category_scores().items()
             }
             metrics["pyrecall.overall"] = snapshot.overall_score()
             mlflow.log_metrics(metrics)

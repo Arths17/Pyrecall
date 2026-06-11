@@ -13,9 +13,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import torch
-
 import pytest
+import torch
 
 pytestmark = pytest.mark.slow
 
@@ -28,7 +27,9 @@ def training_jsonl(tmp_path: Path) -> Path:
         {"text": "### Human: Name the capital of France.\n\n### Assistant: Paris"},
         {"text": "### Human: What colour is the sky?\n\n### Assistant: Blue"},
         {"text": "### Human: How many days are in a week?\n\n### Assistant: 7"},
-        {"text": "### Human: What is the boiling point of water in Celsius?\n\n### Assistant: 100 degrees Celsius"},
+        {
+            "text": "### Human: What is the boiling point of water in Celsius?\n\n### Assistant: 100 degrees Celsius"
+        },
     ]
     p = tmp_path / "train.jsonl"
     p.write_text("\n".join(json.dumps(r) for r in rows))
@@ -43,7 +44,7 @@ def test_full_lifecycle(tmp_path: Path, training_jsonl: Path) -> None:
     model = Model(
         "gpt2",
         strategy="lora",
-        lora_r=4,           # small rank for speed
+        lora_r=4,  # small rank for speed
         lora_alpha=8,
         batch_size=1,
         max_length=128,
@@ -122,8 +123,14 @@ def test_learn_rejects_missing_file(tmp_path: Path) -> None:
     """learn() must raise PyrecallError for a non-existent data file."""
     from pyrecall.model import Model, PyrecallError
 
-    model = Model("gpt2", lora_r=4, lora_alpha=8, batch_size=1, max_length=64,
-                  snapshot_dir=tmp_path / "snapshots")
+    model = Model(
+        "gpt2",
+        lora_r=4,
+        lora_alpha=8,
+        batch_size=1,
+        max_length=64,
+        snapshot_dir=tmp_path / "snapshots",
+    )
 
     with pytest.raises(PyrecallError, match="not found"):
         model.learn(str(tmp_path / "nonexistent.jsonl"))
@@ -133,8 +140,14 @@ def test_generate_returns_string(tmp_path: Path) -> None:
     """generate() must return a non-empty string on a simple prompt."""
     from pyrecall.model import Model
 
-    model = Model("gpt2", lora_r=4, lora_alpha=8, batch_size=1, max_length=64,
-                  snapshot_dir=tmp_path / "snapshots")
+    model = Model(
+        "gpt2",
+        lora_r=4,
+        lora_alpha=8,
+        batch_size=1,
+        max_length=64,
+        snapshot_dir=tmp_path / "snapshots",
+    )
 
     response = model.generate("The capital of France is", max_new_tokens=10)
     assert isinstance(response, str)
@@ -172,7 +185,9 @@ def test_rollback_restores_adapter_weights(tmp_path: Path, training_jsonl: Path)
 
     # Rollback and verify weights match the pre-training state
     model.rollback(to="pre")
-    rolled_back_weight = next(p.clone().detach() for p in model.model.parameters() if p.requires_grad)
+    rolled_back_weight = next(
+        p.clone().detach() for p in model.model.parameters() if p.requires_grad
+    )
 
     assert torch.allclose(pre_weight.cpu(), rolled_back_weight.cpu(), atol=1e-5), (
         "Rolled-back weights don't match the pre-training snapshot"

@@ -6,9 +6,13 @@ from datetime import datetime
 
 import pytest
 
-from pyrecall.detector import CategoryComparison, ForgettingDetector, ForgettingReport, PromptComparison
+from pyrecall.detector import (
+    CategoryComparison,
+    ForgettingDetector,
+    ForgettingReport,
+    PromptComparison,
+)
 from pyrecall.snapshot import SkillScore, SkillSnapshot
-
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
@@ -71,9 +75,7 @@ class TestForgettingReport:
         )
 
     def test_is_healthy_when_no_degradation(self) -> None:
-        report = self._make_report(
-            [("reasoning", 0.8, 0.85), ("coding", 0.7, 0.72)]
-        )
+        report = self._make_report([("reasoning", 0.8, 0.85), ("coding", 0.7, 0.72)])
         assert report.is_healthy is True
 
     def test_degraded_skills_empty_when_healthy(self) -> None:
@@ -98,9 +100,9 @@ class TestForgettingReport:
     def test_degraded_skills_contains_only_bad_categories(self) -> None:
         report = self._make_report(
             [
-                ("reasoning", 0.80, 0.85),   # improved
-                ("coding", 0.80, 0.60),       # forgotten
-                ("safety", 0.75, 0.70),       # slight drop but < threshold
+                ("reasoning", 0.80, 0.85),  # improved
+                ("coding", 0.80, 0.60),  # forgotten
+                ("safety", 0.75, 0.70),  # slight drop but < threshold
             ]
         )
         assert report.degraded_skills == ["coding"]
@@ -116,9 +118,7 @@ class TestForgettingReport:
             snapshot_before="my_before",
             snapshot_after="my_after",
             threshold=0.10,
-            comparisons=[
-                CategoryComparison(category="coding", score_before=0.8, score_after=0.9)
-            ],
+            comparisons=[CategoryComparison(category="coding", score_before=0.8, score_after=0.9)],
         )
         output = str(report)
         assert "my_before" in output
@@ -197,7 +197,14 @@ class TestForgettingReportSerialization:
         after = _make_snapshot("a", {"coding": 0.79})
         report = detector.compare(before, after)
         d = report.to_dict()
-        for key in ("healthy", "snapshot_before", "snapshot_after", "threshold", "degraded_skills", "comparisons"):
+        for key in (
+            "healthy",
+            "snapshot_before",
+            "snapshot_after",
+            "threshold",
+            "degraded_skills",
+            "comparisons",
+        ):
             assert key in d
 
     def test_to_dict_healthy_reflects_report(self) -> None:
@@ -247,6 +254,7 @@ class TestForgettingReportSerialization:
 
     def test_to_json_is_valid_json(self) -> None:
         import json
+
         detector = ForgettingDetector(threshold=0.10)
         before = _make_snapshot("b", {"coding": 0.8})
         after = _make_snapshot("a", {"coding": 0.75})
@@ -275,12 +283,18 @@ class TestForgettingReportSerialization:
 
 
 class TestPromptComparisons:
-    def _make_multi_prompt_snapshot(self, name: str, cat_prompts: dict[str, list[float]]) -> SkillSnapshot:
+    def _make_multi_prompt_snapshot(
+        self, name: str, cat_prompts: dict[str, list[float]]
+    ) -> SkillSnapshot:
         scores = []
         for cat, vals in cat_prompts.items():
             for i, v in enumerate(vals):
-                scores.append(SkillScore(category=cat, prompt=f"prompt_{cat}_{i}", response="r", score=v))
-        return SkillSnapshot(name=name, model_name="m", created_at=datetime(2024, 1, 1), scores=scores)
+                scores.append(
+                    SkillScore(category=cat, prompt=f"prompt_{cat}_{i}", response="r", score=v)
+                )
+        return SkillSnapshot(
+            name=name, model_name="m", created_at=datetime(2024, 1, 1), scores=scores
+        )
 
     def test_compare_populates_prompt_comparisons(self) -> None:
         before = self._make_multi_prompt_snapshot("b", {"coding": [0.8, 0.7]})
@@ -310,7 +324,9 @@ class TestPromptComparisons:
         after = self._make_multi_prompt_snapshot("a", {"coding": [0.5]})
         report = ForgettingDetector(threshold=0.10).compare(before, after)
         from io import StringIO
+
         from rich.console import Console
+
         buf = StringIO()
         report._render(Console(file=buf, highlight=False), verbose=True)
         output = buf.getvalue()
@@ -321,7 +337,9 @@ class TestPromptComparisons:
         after = self._make_multi_prompt_snapshot("a", {"coding": [0.5]})
         report = ForgettingDetector(threshold=0.10).compare(before, after)
         from io import StringIO
+
         from rich.console import Console
+
         buf = StringIO()
         report._render(Console(file=buf, highlight=False), verbose=False)
         output = buf.getvalue()

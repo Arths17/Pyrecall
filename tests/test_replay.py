@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-
 # ── ReplayBuffer unit tests ───────────────────────────────────────────────────
 
 
@@ -140,9 +139,7 @@ class TestReplayBufferClear:
 
 
 class TestReplayBufferReservoirSampling:
-    def test_reservoir_all_items_have_chance_to_be_retained(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reservoir_all_items_have_chance_to_be_retained(self, tmp_path: Path) -> None:
         """With max_size=5 and 50 items, each item should sometimes end up in the buffer."""
         from pyrecall.replay import ReplayBuffer
 
@@ -243,7 +240,9 @@ class TestLearnReplayIntegration:
     def _run_learn(self, model, data_file: Path) -> MagicMock:
         from datasets import Dataset as HFDataset
 
-        real_ds = HFDataset.from_dict({"text": ["sample one", "sample two", "sample three", "sample four"]})
+        real_ds = HFDataset.from_dict(
+            {"text": ["sample one", "sample two", "sample three", "sample four"]}
+        )
 
         mock_trainer = MagicMock()
         with (
@@ -266,9 +265,7 @@ class TestLearnReplayIntegration:
         self._run_learn(patched_model_with_replay, data_file)
         assert len(patched_model_with_replay.replay_buffer) > 0
 
-    def test_replay_disabled_when_buffer_size_zero(
-        self, tmp_path: Path
-    ) -> None:
+    def test_replay_disabled_when_buffer_size_zero(self, tmp_path: Path) -> None:
         snap_dir = tmp_path / "snapshots"
         snap_dir.mkdir()
         mock_tok = _make_mock_tokenizer()
@@ -294,9 +291,7 @@ class TestLearnReplayIntegration:
         data_file.write_text(json.dumps({"text": "first run"}) + "\n")
 
         # Seed the buffer so mixing is triggered.
-        patched_model_with_replay.replay_buffer.add(
-            [f"past example {i}" for i in range(10)]
-        )
+        patched_model_with_replay.replay_buffer.add([f"past example {i}" for i in range(10)])
 
         real_ds = HFDataset.from_dict({"text": ["a", "b", "c", "d"]})
 
@@ -319,7 +314,8 @@ class TestLearnReplayIntegration:
         ):
             patched_model_with_replay.tokenizer.side_effect = None
             patched_model_with_replay.tokenizer.return_value = {
-                "input_ids": [1, 2], "attention_mask": [1, 1]
+                "input_ids": [1, 2],
+                "attention_mask": [1, 1],
             }
             patched_model_with_replay.learn(str(data_file), epochs=1)
 

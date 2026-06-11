@@ -11,7 +11,6 @@ import pytest
 from pyrecall.rollback import RollbackManager
 from pyrecall.snapshot import SkillScore, SkillSnapshot
 
-
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 
