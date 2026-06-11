@@ -16,7 +16,7 @@ You spend a month training your dog to sit, stay, and roll over. Then you spend 
 
 The dog is now a great fetcher.
 
-It has also completely forgotten how to sit.
+However, it has also completely forgotten how to sit.
 
 **LLMs do the exact same thing.** Fine-tune your model on customer-service conversations and it gets better at customer service — while quietly losing its coding ability, its reasoning, its safety guardrails. Nobody notices until a user complains, or worse, until something ships.
 
@@ -84,6 +84,7 @@ When you call `model.snapshot("name")`, pyrecall:
 2. Embeds each response using the model's own hidden states
 3. Scores each response against a reference answer via cosine similarity
 4. Saves scores + LoRA adapter weights to `~/.pyrecall/snapshots/`
+5. Has a **privacy** optional parameter which users can use to hide their private data from being openly stored on their local files **Make sure you create a .env file** to store your **key** by doing **print(Fernet.generate_key().decode())**
 
 All local. No API calls. Works offline.
 
