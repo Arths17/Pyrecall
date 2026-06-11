@@ -162,6 +162,9 @@ pyrecall learn train.jsonl --epochs 5 --snapshot-after after_v1
 # Check for forgetting (compares the last two snapshots)
 pyrecall check
 
+# See exactly which prompts drove a drop — per-prompt breakdown for degraded skills
+pyrecall check --verbose
+
 # Or compare specific named snapshots
 pyrecall check --before before_v1 --after after_v1
 
@@ -196,6 +199,14 @@ pyrecall replay clear --yes   # skip the prompt
 ```
 
 `pyrecall check` exits with **code 2** when forgetting is detected — drop it straight into your CI pipeline as a training gate.
+
+```bash
+# Machine-readable output — per-prompt scores included in JSON
+pyrecall check --json | jq '.comparisons[] | select(.status=="FORGOTTEN") | .prompts'
+
+# Human-readable per-prompt breakdown (shows worst-drop prompts first)
+pyrecall check --verbose
+```
 
 ### learn flags
 

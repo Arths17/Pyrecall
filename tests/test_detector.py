@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from pyrecall.detector import CategoryComparison, ForgettingDetector, ForgettingReport
+from pyrecall.detector import CategoryComparison, ForgettingDetector, ForgettingReport, PromptComparison
 from pyrecall.snapshot import SkillScore, SkillSnapshot
 
 
@@ -254,3 +254,75 @@ class TestForgettingReportSerialization:
         parsed = json.loads(report.to_json())
         assert parsed["snapshot_before"] == "b"
         assert parsed["snapshot_after"] == "a"
+
+    def test_to_dict_comparisons_include_prompts_key(self) -> None:
+        detector = ForgettingDetector(threshold=0.10)
+        before = _make_snapshot("b", {"coding": 0.8})
+        after = _make_snapshot("a", {"coding": 0.6})
+        report = detector.compare(before, after)
+        comp = report.to_dict()["comparisons"][0]
+        assert "prompts" in comp
+        assert len(comp["prompts"]) == 1
+
+    def test_to_dict_prompt_entry_fields(self) -> None:
+        detector = ForgettingDetector(threshold=0.10)
+        before = _make_snapshot("b", {"coding": 0.8})
+        after = _make_snapshot("a", {"coding": 0.6})
+        report = detector.compare(before, after)
+        p = report.to_dict()["comparisons"][0]["prompts"][0]
+        for key in ("category", "prompt", "score_before", "score_after", "delta"):
+            assert key in p
+
+
+class TestPromptComparisons:
+    def _make_multi_prompt_snapshot(self, name: str, cat_prompts: dict[str, list[float]]) -> SkillSnapshot:
+        scores = []
+        for cat, vals in cat_prompts.items():
+            for i, v in enumerate(vals):
+                scores.append(SkillScore(category=cat, prompt=f"prompt_{cat}_{i}", response="r", score=v))
+        return SkillSnapshot(name=name, model_name="m", created_at=datetime(2024, 1, 1), scores=scores)
+
+    def test_compare_populates_prompt_comparisons(self) -> None:
+        before = self._make_multi_prompt_snapshot("b", {"coding": [0.8, 0.7]})
+        after = self._make_multi_prompt_snapshot("a", {"coding": [0.6, 0.5]})
+        report = ForgettingDetector().compare(before, after)
+        assert len(report.prompt_comparisons) == 2
+
+    def test_prompts_for_category_sorted_worst_first(self) -> None:
+        before = self._make_multi_prompt_snapshot("b", {"coding": [0.9, 0.8]})
+        after = self._make_multi_prompt_snapshot("a", {"coding": [0.4, 0.75]})
+        report = ForgettingDetector().compare(before, after)
+        prompts = report.prompts_for_category("coding")
+        assert prompts[0].delta < prompts[1].delta
+
+    def test_prompts_for_category_filters_correctly(self) -> None:
+        before = self._make_multi_prompt_snapshot("b", {"coding": [0.8], "safety": [0.9]})
+        after = self._make_multi_prompt_snapshot("a", {"coding": [0.7], "safety": [0.8]})
+        report = ForgettingDetector().compare(before, after)
+        assert all(p.category == "coding" for p in report.prompts_for_category("coding"))
+
+    def test_prompt_comparison_delta(self) -> None:
+        p = PromptComparison(category="c", prompt="q", score_before=0.8, score_after=0.6)
+        assert p.delta == pytest.approx(-0.2, abs=1e-6)
+
+    def test_verbose_render_includes_prompt_text(self) -> None:
+        before = self._make_multi_prompt_snapshot("b", {"coding": [0.9]})
+        after = self._make_multi_prompt_snapshot("a", {"coding": [0.5]})
+        report = ForgettingDetector(threshold=0.10).compare(before, after)
+        from io import StringIO
+        from rich.console import Console
+        buf = StringIO()
+        report._render(Console(file=buf, highlight=False), verbose=True)
+        output = buf.getvalue()
+        assert "prompt_coding_0" in output
+
+    def test_non_verbose_render_omits_prompt_table(self) -> None:
+        before = self._make_multi_prompt_snapshot("b", {"coding": [0.9]})
+        after = self._make_multi_prompt_snapshot("a", {"coding": [0.5]})
+        report = ForgettingDetector(threshold=0.10).compare(before, after)
+        from io import StringIO
+        from rich.console import Console
+        buf = StringIO()
+        report._render(Console(file=buf, highlight=False), verbose=False)
+        output = buf.getvalue()
+        assert "prompt_coding_0" not in output

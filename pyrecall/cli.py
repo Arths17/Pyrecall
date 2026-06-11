@@ -391,6 +391,10 @@ def check(
         bool,
         typer.Option("--json", help="Output results as JSON instead of a rich table. Useful for CI pipelines and dashboards."),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show per-prompt score breakdown for each degraded skill."),
+    ] = False,
 ) -> None:
     """
     Compare two snapshots to detect forgotten skills.
@@ -399,9 +403,13 @@ def check(
     snapshots.  Pass --before and --after to compare specific snapshots.
     Exits with code 2 when forgetting is detected.
 
-    Use --json to get machine-readable output:
+    Use --json to get machine-readable output (includes per-prompt detail):
 
-        pyrecall check --json | jq '.degraded_skills'
+        pyrecall check --json | jq '.comparisons[].prompts'
+
+    Use --verbose to see which specific benchmark prompts drove a drop:
+
+        pyrecall check --verbose
     """
     config = _read_config()
     mgr = _build_rollback_manager(config)
@@ -449,7 +457,7 @@ def check(
     if json_output:
         typer.echo(report.to_json())
     else:
-        report.print()
+        report.print(verbose=verbose)
 
     if report.degraded_skills:
         raise typer.Exit(2)  # Non-zero exit so CI pipelines can catch forgetting.

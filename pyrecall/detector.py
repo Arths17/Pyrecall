@@ -14,6 +14,29 @@ from .utils import console as _shared_console
 
 
 @dataclass
+class PromptComparison:
+    """Before/after scores for a single benchmark prompt."""
+
+    category: str
+    prompt: str
+    score_before: float
+    score_after: float
+
+    @property
+    def delta(self) -> float:
+        return self.score_after - self.score_before
+
+    def to_dict(self) -> dict:
+        return {
+            "category": self.category,
+            "prompt": self.prompt,
+            "score_before": round(self.score_before, 4),
+            "score_after": round(self.score_after, 4),
+            "delta": round(self.delta, 4),
+        }
+
+
+@dataclass
 class CategoryComparison:
     """Before/after scores for one skill category."""
 
@@ -47,6 +70,7 @@ class ForgettingReport:
     snapshot_after: str
     threshold: float
     comparisons: list[CategoryComparison] = field(default_factory=list)
+    prompt_comparisons: list[PromptComparison] = field(default_factory=list)
 
     # ── inspection ─────────────────────────────────────────────────────────────
 
@@ -64,6 +88,13 @@ class ForgettingReport:
         """True when no skill degraded beyond the threshold."""
         return len(self.degraded_skills) == 0
 
+    def prompts_for_category(self, category: str) -> list[PromptComparison]:
+        """Return per-prompt comparisons for *category*, worst delta first."""
+        return sorted(
+            [p for p in self.prompt_comparisons if p.category == category],
+            key=lambda p: p.delta,
+        )
+
     def to_dict(self) -> dict:
         """Return a JSON-serialisable representation of the report."""
         return {
@@ -80,6 +111,7 @@ class ForgettingReport:
                     "delta": round(c.delta, 4),
                     "pct_change": round(c.pct_change, 2),
                     "status": "FORGOTTEN" if (c.score_before - c.score_after) > self.threshold else "OK",
+                    "prompts": [p.to_dict() for p in self.prompts_for_category(c.category)],
                 }
                 for c in self.comparisons
             ],
@@ -96,11 +128,11 @@ class ForgettingReport:
         self._render(Console(file=buf, highlight=False))
         return buf.getvalue()
 
-    def print(self) -> None:
+    def print(self, verbose: bool = False) -> None:
         """Print the report to the terminal using rich formatting."""
-        self._render(_shared_console)
+        self._render(_shared_console, verbose=verbose)
 
-    def _render(self, console: Console) -> None:
+    def _render(self, console: Console, verbose: bool = False) -> None:
         table = Table(
             title=(
                 f"Forgetting Report  [dim]{self.snapshot_before}[/dim]"
@@ -147,6 +179,35 @@ class ForgettingReport:
                 f"(threshold: {self.threshold:.0%}).[/success]\n"
             )
 
+        if verbose and self.prompt_comparisons:
+            categories_to_show = self.degraded_skills if self.degraded_skills else sorted(
+                {p.category for p in self.prompt_comparisons}
+            )
+            for cat in categories_to_show:
+                prompts = self.prompts_for_category(cat)
+                if not prompts:
+                    continue
+                pt = Table(
+                    title=f"[bold]{cat}[/bold] — per-prompt breakdown",
+                    show_lines=False,
+                    title_justify="left",
+                )
+                pt.add_column("Prompt", no_wrap=False, max_width=60)
+                pt.add_column("Before", justify="right")
+                pt.add_column("After", justify="right")
+                pt.add_column("Δ", justify="right")
+                for p in prompts:
+                    sign = "+" if p.delta >= 0 else ""
+                    delta_style = "red" if p.delta < 0 else "green"
+                    pt.add_row(
+                        p.prompt,
+                        f"{p.score_before:.3f}",
+                        f"{p.score_after:.3f}",
+                        f"[{delta_style}]{sign}{p.delta:.3f}[/{delta_style}]",
+                    )
+                console.print(pt)
+                console.print()
+
 
 class ForgettingDetector:
     """
@@ -180,9 +241,24 @@ class ForgettingDetector:
             for cat in all_categories
         ]
 
+        # Build per-prompt comparisons by matching on (category, prompt) key.
+        before_map = {(s.category, s.prompt): s.score for s in before.scores}
+        after_map = {(s.category, s.prompt): s.score for s in after.scores}
+        all_keys = sorted(set(before_map) | set(after_map))
+        prompt_comparisons = [
+            PromptComparison(
+                category=cat,
+                prompt=prompt,
+                score_before=before_map.get((cat, prompt), 0.0),
+                score_after=after_map.get((cat, prompt), 0.0),
+            )
+            for cat, prompt in all_keys
+        ]
+
         return ForgettingReport(
             snapshot_before=before.name,
             snapshot_after=after.name,
             threshold=self.threshold,
             comparisons=comparisons,
+            prompt_comparisons=prompt_comparisons,
         )
