@@ -1,4 +1,4 @@
-"""Tests for all CLI commands: init, learn, snapshot, check, rollback, status, replay."""
+"""Tests for all CLI commands: init, learn, snapshot, check, rollback, status, replay, export."""
 
 from __future__ import annotations
 
@@ -1249,3 +1249,128 @@ class TestHistory:
             result = runner.invoke(app, ["history"])
         assert "first" in result.output
         assert "last" in result.output
+
+
+# ── export ────────────────────────────────────────────────────────────────────
+
+
+class TestExport:
+    def test_fails_without_config_file(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        result = runner.invoke(app, ["export"])
+        assert result.exit_code == 1
+
+    def test_no_snapshots_exits_zero_with_message(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[])
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export"])
+        assert result.exit_code == 0
+        assert "No snapshots" in result.output
+
+    def test_stdout_json_is_valid(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        snaps = [_make_snapshot("v1", {"coding": 0.8}), _make_snapshot("v2", {"coding": 0.75})]
+        mgr = _make_mock_manager(snapshots=snaps)
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export"])
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+
+    def test_json_record_has_expected_keys(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("v1", {"coding": 0.8})])
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export"])
+        record = json.loads(result.output)[0]
+        assert "name" in record
+        assert "created_at" in record
+        assert "overall" in record
+        assert "categories" in record
+
+    def test_export_json_to_file(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("v1", {"coding": 0.8})])
+        out = tmp_path / "out.json"
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export", str(out)])
+        assert result.exit_code == 0
+        assert out.exists()
+        parsed = json.loads(out.read_text())
+        assert parsed[0]["name"] == "v1"
+
+    def test_export_csv_to_file(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        snaps = [_make_snapshot("v1", {"coding": 0.8}), _make_snapshot("v2", {"coding": 0.75})]
+        mgr = _make_mock_manager(snapshots=snaps)
+        out = tmp_path / "out.csv"
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export", str(out)])
+        assert result.exit_code == 0
+        assert out.exists()
+        lines = out.read_text().splitlines()
+        assert lines[0].startswith("snapshot,created_at,overall")
+        assert len(lines) == 3  # header + 2 rows
+
+    def test_export_csv_stdout_via_format_flag(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("v1", {"coding": 0.8})])
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export", "--format", "csv"])
+        assert result.exit_code == 0
+        assert "snapshot" in result.output
+        assert "v1" in result.output
+
+    def test_unknown_extension_exits_one(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("v1")])
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export", str(tmp_path / "out.txt")])
+        assert result.exit_code == 1
+
+    def test_invalid_format_flag_exits_one(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("v1")])
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export", "--format", "parquet"])
+        assert result.exit_code == 1
+
+    def test_json_categories_contain_scores(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("v1", {"coding": 0.82, "reasoning": 0.77})])
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["export"])
+        record = json.loads(result.output)[0]
+        assert "coding" in record["categories"]
+        assert "reasoning" in record["categories"]

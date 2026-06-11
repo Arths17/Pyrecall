@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Optional
@@ -735,3 +737,120 @@ def replay_clear(
 
     buf.clear()
     console.print(f"[green]✓ Replay buffer cleared[/green] for [bold]{model_name}[/bold].")
+
+
+# ── export ─────────────────────────────────────────────────────────────────────
+
+
+@app.command()
+def export(
+    output: Annotated[
+        Optional[str],
+        typer.Argument(help="Output file path (.csv or .json). Omit to print JSON to stdout."),
+    ] = None,
+    fmt: Annotated[
+        Optional[str],
+        typer.Option("--format", "-f", help="Force output format: 'csv' or 'json'. Auto-detected from file extension when omitted."),
+    ] = None,
+) -> None:
+    """
+    Export all snapshot scores to CSV or JSON for external analysis.
+
+    CSV produces one row per snapshot per category (tidy/long format),
+    ready to load into pandas or a spreadsheet:
+
+        pyrecall export scores.csv
+
+    JSON produces one object per snapshot with nested category scores:
+
+        pyrecall export scores.json
+
+    Omit the output path to stream JSON to stdout:
+
+        pyrecall export | jq '.[0].categories'
+    """
+    config = _read_config()
+    mgr = _build_rollback_manager(config)
+    all_snaps = mgr.list_snapshots()
+
+    if not all_snaps:
+        console.print(
+            "[yellow]No snapshots found.[/yellow] "
+            "Run [bold]pyrecall snapshot <name>[/bold] to create one."
+        )
+        return
+
+    # Resolve format.
+    resolved_fmt = fmt
+    if resolved_fmt is None:
+        if output:
+            ext = Path(output).suffix.lower()
+            if ext == ".csv":
+                resolved_fmt = "csv"
+            elif ext in (".json", ".jsonl"):
+                resolved_fmt = "json"
+            else:
+                console.print(
+                    f"[red]Error:[/red] Cannot infer format from extension '{ext}'. "
+                    "Use --format csv or --format json."
+                )
+                raise typer.Exit(1)
+        else:
+            resolved_fmt = "json"
+
+    if resolved_fmt not in ("csv", "json"):
+        console.print(
+            f"[red]Error:[/red] Unknown format '{resolved_fmt}'. Use 'csv' or 'json'."
+        )
+        raise typer.Exit(1)
+
+    if resolved_fmt == "json":
+        records = [
+            {
+                "name": snap.name,
+                "created_at": snap.created_at.isoformat(),
+                "overall": round(snap.overall_score(), 4),
+                "categories": {
+                    cat: round(score, 4)
+                    for cat, score in snap.category_scores().items()
+                },
+            }
+            for snap in all_snaps
+        ]
+        payload = json.dumps(records, indent=2)
+        if output:
+            Path(output).write_text(payload)
+            console.print(f"[green]✓ Exported {len(all_snaps)} snapshots to[/green] [bold]{output}[/bold]")
+        else:
+            sys.stdout.write(payload + "\n")
+
+    else:  # csv
+        all_categories: list[str] = []
+        for snap in all_snaps:
+            for cat in snap.category_scores():
+                if cat not in all_categories:
+                    all_categories.append(cat)
+
+        fieldnames = ["snapshot", "created_at", "overall"] + all_categories
+        rows = []
+        for snap in all_snaps:
+            cat_scores = snap.category_scores()
+            row: dict = {
+                "snapshot": snap.name,
+                "created_at": snap.created_at.isoformat(),
+                "overall": round(snap.overall_score(), 4),
+            }
+            for cat in all_categories:
+                row[cat] = round(cat_scores.get(cat, 0.0), 4)
+            rows.append(row)
+
+        if output:
+            with open(output, "w", newline="") as fh:
+                writer = csv.DictWriter(fh, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+            console.print(f"[green]✓ Exported {len(all_snaps)} snapshots to[/green] [bold]{output}[/bold]")
+        else:
+            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)

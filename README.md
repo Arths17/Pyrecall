@@ -174,6 +174,13 @@ pyrecall status
 # Show score trends across all snapshots with coloured trend arrows
 pyrecall history
 
+# Export all snapshot scores to CSV (one row per snapshot) or JSON
+pyrecall export scores.csv
+pyrecall export scores.json
+
+# Stream JSON to stdout for piping
+pyrecall export | jq '.[0].categories'
+
 # Limit to the 5 most recent snapshots
 pyrecall history --last 5
 
