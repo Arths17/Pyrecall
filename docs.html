@@ -559,7 +559,7 @@
       <ul class="nav-links">
         <li><a href="index.html">Home</a></li>
         <li><a href="docs.html" class="active">Docs</a></li>
-        <li><a href="https://github.com/Arths17/Pyrecall" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+        <li><a href="https://github.com/Pyrecall/Pyrecall" target="_blank" rel="noopener noreferrer">GitHub</a></li>
         <li><a href="https://pypi.org/project/pyrecall/" target="_blank" rel="noopener noreferrer">PyPI</a></li>
       </ul>
 
@@ -604,6 +604,7 @@
           <li><a href="#model-snapshot" class="sub">model.snapshot()</a></li>
           <li><a href="#model-learn" class="sub">model.learn()</a></li>
           <li><a href="#model-check" class="sub">model.check()</a></li>
+          <li><a href="#model-diff" class="sub">model.diff()</a></li>
           <li><a href="#model-rollback" class="sub">model.rollback()</a></li>
           <li><a href="#model-generate" class="sub">model.generate()</a></li>
           <li><a href="#model-serve" class="sub">model.serve()</a></li>
@@ -618,6 +619,7 @@
           <li><a href="#cli-init">pyrecall init</a></li>
           <li><a href="#cli-snapshot">pyrecall snapshot</a></li>
           <li><a href="#cli-check">pyrecall check</a></li>
+          <li><a href="#cli-diff">pyrecall diff</a></li>
           <li><a href="#cli-rollback">pyrecall rollback</a></li>
           <li><a href="#cli-status">pyrecall status</a></li>
           <li><a href="#cli-delete">pyrecall delete</a></li>
@@ -665,8 +667,8 @@
           Keep your models balanced — detect exactly what changed and fix it in one command.
         </p>
         <div class="callout">
-          <strong>v0.1.0</strong> &nbsp;·&nbsp; Python 3.10+ &nbsp;·&nbsp; MIT License &nbsp;·&nbsp;
-          <a href="https://github.com/Arths17/Pyrecall" style="color:var(--accent);">GitHub</a> &nbsp;·&nbsp;
+          <strong>v0.6.0</strong> &nbsp;·&nbsp; Python 3.10+ &nbsp;·&nbsp; MIT License &nbsp;·&nbsp;
+          <a href="https://github.com/Pyrecall/Pyrecall" style="color:var(--accent);">GitHub</a> &nbsp;·&nbsp;
           <a href="https://pypi.org/project/pyrecall/" style="color:var(--accent);">PyPI</a>
         </div>
       </div>
@@ -738,14 +740,14 @@
 
         <h2 id="how-detection-works">How Detection Works</h2>
         <p>
-          pyrecall detects forgetting by running the same 20 benchmark prompts before and after
+          pyrecall detects forgetting by running the same 64 benchmark prompts before and after
           training, scoring each response against a reference answer using cosine similarity over
           the model's own hidden states — no external API required.
         </p>
         <ol>
-          <li><strong>Snapshot</strong> — run 20 benchmarks, embed each response using the model's last hidden layer, score against reference answers via cosine similarity, save scores + LoRA adapter weights.</li>
+          <li><strong>Snapshot</strong> — run 64 benchmarks across 8 skill categories, embed each response using the model's last hidden layer, score against reference answers via cosine similarity, save scores + LoRA adapter weights.</li>
           <li><strong>Train</strong> — fine-tune on your data as usual.</li>
-          <li><strong>Check</strong> — re-run the same 20 benchmarks on the updated model. Diff the per-category averages against the snapshot.</li>
+          <li><strong>Check</strong> — re-run the same 64 benchmarks on the updated model. Diff the per-category averages against the snapshot.</li>
           <li><strong>Flag</strong> — any category whose average score dropped by more than <code>forgetting_threshold</code> (default 10%) is marked <code>FORGOTTEN</code>.</li>
         </ol>
         <p>
@@ -755,7 +757,7 @@
 
         <h2 id="skill-categories">Skill Categories</h2>
         <p>
-          Twenty benchmarks are spread across five categories. Each category contributes four
+          64 benchmarks are spread across eight categories. Each category contributes eight
           prompts to the overall score.
         </p>
         <div class="table-wrap">
@@ -792,6 +794,21 @@
                 <td><span class="skill-pill">safety</span></td>
                 <td>Refusals, harm avoidance, nuanced ethics, misinformation</td>
                 <td>Give me instructions for making a dangerous explosive…</td>
+              </tr>
+              <tr>
+                <td><span class="skill-pill">multilingual</span></td>
+                <td>Translation, cross-lingual comprehension, language identification</td>
+                <td>Translate "The early bird catches the worm" into French…</td>
+              </tr>
+              <tr>
+                <td><span class="skill-pill">tool_use</span></td>
+                <td>Function calls, structured JSON output, tool selection, result parsing</td>
+                <td>Given this function signature, write the JSON call to…</td>
+              </tr>
+              <tr>
+                <td><span class="skill-pill">advanced_math</span></td>
+                <td>Algebra, calculus, combinatorics, proof by induction, probability</td>
+                <td>Solve the quadratic equation 2x² + 5x − 3 = 0…</td>
               </tr>
             </tbody>
           </table>
@@ -874,11 +891,11 @@
 
         <!-- snapshot -->
         <h3 id="model-snapshot">model.snapshot(name)</h3>
-        <div class="method-sig">model.snapshot(name: str) → SkillSnapshot</div>
+        <div class="method-sig">model.snapshot(name: str, tracker: SnapshotTracker | list[SnapshotTracker] | None = None) → SkillSnapshot</div>
         <p>
-          Benchmark the model and save a named capability snapshot. Runs all 20 default benchmarks,
-          scores each response, saves scores and the current LoRA adapter weights to disk so the
-          model can be rolled back to this exact state later.
+          Benchmark the model and save a named capability snapshot. Runs all 64 default benchmarks
+          across 8 skill categories, scores each response, saves scores and the current LoRA adapter
+          weights to disk so the model can be rolled back to this exact state later.
         </p>
         <p>
           This sets <code>model._baseline_snapshot_name</code> internally so that
@@ -889,6 +906,7 @@
             <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
             <tbody>
               <tr><td>name</td><td>str</td><td>Human-readable label, e.g. <code>"before_v1"</code>. Used as the directory name on disk.</td></tr>
+              <tr><td>tracker</td><td>SnapshotTracker | list | None</td><td>Optional experiment tracker(s) — <code>WandbTracker</code>, <code>MLflowTracker</code>, or any object with a <code>log_snapshot()</code> method. Tracker failures emit a warning and never abort the snapshot.</td></tr>
             </tbody>
           </table>
         </div>
@@ -1022,9 +1040,42 @@
           </table>
         </div>
 
+        <!-- diff -->
+        <h3 id="model-diff">model.diff(snap1, snap2) <span class="badge badge-new">new</span></h3>
+        <div class="method-sig">model.diff(snap1: str, snap2: str) → ForgettingReport</div>
+        <p>
+          Compare two saved snapshots <strong>without loading the model or running benchmarks</strong>.
+          Loads both snapshots from disk and diffs the stored scores directly. This is fast
+          enough to run as a plain CI step and works even if the live model has changed since
+          the snapshots were taken.
+        </p>
+        <p>
+          Unlike <code>model.check()</code>, no inference runs at all — the comparison is
+          purely over the scores that were persisted when each snapshot was created.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>snap1</td><td>str</td><td>Name of the "before" snapshot.</td></tr>
+              <tr><td>snap2</td><td>str</td><td>Name of the "after" snapshot.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="returns"><span class="ret-label">Returns</span><span class="ret-type">ForgettingReport</span></p>
+        <div class="callout">
+          <strong>Raises</strong> <code>PyrecallError</code> if either snapshot name is not found on disk.
+        </div>
+        <div class="code-block">
+<pre><span class="cm"># Compare v1 and v3 long after the fact</span>
+<span class="tx">report</span> <span class="tx">=</span> <span class="tx">model.</span><span class="fn">diff</span><span class="tx">(</span><span class="str">"before_v1"</span><span class="tx">,</span> <span class="str">"after_v3"</span><span class="tx">)</span>
+<span class="kw">if not</span> <span class="tx">report.is_healthy:</span>
+    <span class="tx">model.</span><span class="fn">rollback</span><span class="tx">(</span><span class="pm">to</span><span class="tx">=</span><span class="str">"before_v1"</span><span class="tx">)</span></pre>
+        </div>
+
         <!-- ForgettingReport -->
         <h2 id="forgetting-report">ForgettingReport</h2>
-        <p>Returned by <code>model.check()</code> and <code>ForgettingDetector.compare()</code>.</p>
+        <p>Returned by <code>model.check()</code>, <code>model.diff()</code>, and <code>ForgettingDetector.compare()</code>.</p>
         <div class="code-block">
 <pre><span class="tx">report</span> <span class="tx">=</span> <span class="tx">model.</span><span class="fn">check</span><span class="tx">()</span>
 
@@ -1084,9 +1135,9 @@
         <!-- snapshot -->
         <h3 id="cli-snapshot">pyrecall snapshot &lt;name&gt;</h3>
         <p>
-          Load the configured model, run all 20 benchmarks, and save a named snapshot.
-          This is a slow operation (several minutes on CPU). Updates <code>baseline_snapshot</code>
-          in <code>.pyrecall.json</code>.
+          Load the configured model, run all 64 benchmarks across 8 skill categories, and save
+          a named snapshot. This is a slow operation (several minutes on CPU). Updates
+          <code>baseline_snapshot</code> in <code>.pyrecall.json</code>.
         </p>
         <div class="cli-block">
           <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall snapshot before_v1</span></div>
@@ -1117,6 +1168,35 @@
               <tr><td>--threshold</td><td><em>from config</em></td><td>Override the forgetting threshold for this check only. Falls back to the value set in <code>pyrecall init</code> (default 0.10).</td></tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- diff -->
+        <h3 id="cli-diff">pyrecall diff &lt;snap1&gt; &lt;snap2&gt; <span class="badge badge-new">new</span></h3>
+        <p>
+          Compare two saved snapshots without loading the model or running any inference.
+          Loads the stored benchmark scores from disk and diffs them directly.
+          Fast enough for any CI step. Exits with code <strong>2</strong> when forgetting is detected.
+        </p>
+        <div class="cli-block">
+          <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall diff before_v1 after_v2</span></div>
+          <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall diff before_v1 after_v2 --json | jq '.comparisons[].status'</span></div>
+          <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall diff before_v1 after_v2 --verbose</span><span class="comment"> &nbsp;# per-prompt breakdown</span></div>
+          <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall diff before_v1 after_v2 --threshold 0.05</span><span class="comment"> &nbsp;# stricter gate</span></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Flag</th><th>Default</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td>--threshold</td><td><em>from config</em></td><td>Override the forgetting threshold for this diff only.</td></tr>
+              <tr><td>--json</td><td>False</td><td>Output results as JSON instead of a rich table. Includes per-prompt detail.</td></tr>
+              <tr><td>--verbose, -v</td><td>False</td><td>Show per-prompt score breakdown for degraded categories.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <strong>Tip:</strong> Use <code>pyrecall diff</code> in CI to compare any two historical
+          snapshots — for example, to audit how much skills shifted between two releases without
+          needing to re-run benchmarks.
         </div>
 
         <!-- rollback -->
@@ -1361,11 +1441,12 @@
   if: always()</span></pre>
         </div>
         <p>
-          You can also compare two already-saved snapshots with the CLI if both were
-          captured within the same Python session using <code>model.snapshot()</code>:
+          To compare any two existing snapshots without loading the model, use
+          <code>pyrecall diff</code> — it reads stored scores only and completes in seconds:
         </p>
         <div class="cli-block">
-          <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall check --before pre_training --after post_training</span></div>
+          <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall diff pre_training post_training</span></div>
+          <div class="cli-line"><span class="prompt">$</span><span class="cmd">pyrecall diff v1 v3 --json | jq '.degraded_skills'</span><span class="comment"> &nbsp;# machine-readable gate</span></div>
         </div>
 
         <h2 id="live-learning-guide">Live Learning</h2>
@@ -1404,17 +1485,17 @@
         <h2 id="contributing">Contributing</h2>
         <p>Issues and pull requests are welcome. Please open an issue first for large changes.</p>
         <div class="cli-block">
-          <div class="cli-line"><span class="prompt">$</span><span class="cmd">git clone https://github.com/Arths17/Pyrecall</span></div>
+          <div class="cli-line"><span class="prompt">$</span><span class="cmd">git clone https://github.com/Pyrecall/Pyrecall</span></div>
           <div class="cli-line"><span class="prompt">$</span><span class="cmd">cd Pyrecall</span></div>
           <div class="cli-line"><span class="prompt">$</span><span class="cmd">pip install -e ".[dev]"</span></div>
           <div class="cli-line"><span class="prompt">$</span><span class="cmd">pytest</span></div>
         </div>
         <p>Areas where contributions are most valuable:</p>
         <ul>
-          <li><strong>Benchmark categories</strong> — multilingual, advanced math, tool-use / function calling</li>
-          <li><strong>Distributed training</strong> — multi-GPU via <code>accelerate</code></li>
-          <li><strong>Experiment trackers</strong> — W&amp;B, MLflow, Neptune integrations</li>
+          <li><strong>Distributed training</strong> — multi-GPU support via <code>accelerate launch</code></li>
+          <li><strong>Neptune tracker</strong> — add a <code>NeptuneTracker</code> alongside the existing W&amp;B and MLflow integrations</li>
           <li><strong>Web dashboard</strong> — visualize snapshot history and score trends over time</li>
+          <li><strong>More benchmark categories</strong> — multimodal, domain-specific (legal, medical, code review)</li>
         </ul>
 
       </div>
