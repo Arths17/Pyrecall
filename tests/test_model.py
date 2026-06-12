@@ -51,6 +51,7 @@ def _make_mock_peft_model() -> MagicMock:
     hidden = torch.randn(1, 8, 32)
     outputs = MagicMock()
     outputs.hidden_states = [hidden] * 4
+    outputs.loss = torch.tensor(1.0)
     peft.return_value = outputs
 
     peft.generate.return_value = torch.zeros(1, 10, dtype=torch.long)

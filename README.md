@@ -80,11 +80,12 @@ That's it. The model is back to where it was before the dog forgot how to sit.
 
 When you call `model.snapshot("name")`, pyrecall:
 
-1. Runs **64 benchmark prompts** across eight skill categories
-2. Embeds each response using the model's own hidden states
-3. Scores each response against a reference answer via cosine similarity
-4. Saves scores + LoRA adapter weights to `~/.pyrecall/snapshots/`
-5. Optionally encrypts snapshot metadata when `privacy=True` (requires `pip install pyrecall[privacy]`).
+1. Runs **160 benchmark prompts** across eight skill categories (20 per category)
+2. Scores each category by computing the model's **log-likelihood** of the reference answer — the same metric used by EleutherAI lm-evaluation-harness
+3. Saves scores + LoRA adapter weights to `~/.pyrecall/snapshots/`
+4. Optionally encrypts snapshot metadata when `privacy=True` (requires `pip install pyrecall[privacy]`).
+
+Log-likelihood scoring asks "how probable does the model consider the correct answer?" rather than comparing embeddings. This gives a direct, reliable signal: if the model forgets how to code, its probability of generating the reference implementation drops — even if the response *sounds* fluent.
 
 All local. No API calls. Works offline.
 
@@ -101,24 +102,36 @@ All local. No API calls. Works offline.
 
 ### 2. Forgetting detection
 
-`model.check()` re-runs the same 64 benchmarks on the current model and diffs the scores:
+`model.check()` re-runs the same 160 benchmarks on the current model and diffs the scores:
 
 ```text
-┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
-┃ Skill                ┃ Before  ┃  After  ┃ Δ Score               ┃  Status   ┃
-┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ reasoning            │  0.812  │  0.809  │ -0.003 (-0.4%)        │    OK     │
-│ instruction_followin │  0.798  │  0.793  │ -0.005 (-0.6%)        │    OK     │
-│ coding               │  0.834  │  0.641  │ -0.193 (-23.1%)       │ FORGOTTEN │
-│ general_knowledge    │  0.821  │  0.825  │ +0.004 (+0.5%)        │    OK     │
-│ safety               │  0.901  │  0.899  │ -0.002 (-0.2%)        │    OK     │
-└──────────────────────┴─────────┴─────────┴───────────────────────┴───────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Skill                ┃ Before  ┃  After  ┃ Δ Score               ┃ Cohen's d ┃ Severity  ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ reasoning            │  0.812  │  0.809  │ -0.003 (-0.4%)        │    -0.05  │    OK     │
+│ instruction_followin │  0.798  │  0.793  │ -0.005 (-0.6%)        │    -0.08  │    OK     │
+│ coding               │  0.834  │  0.641  │ -0.193 (-23.1%)       │    -1.24  │ CRITICAL  │
+│ general_knowledge    │  0.821  │  0.825  │ +0.004 (+0.5%)        │    +0.06  │    OK     │
+│ safety               │  0.901  │  0.899  │ -0.002 (-0.2%)        │    -0.03  │    OK     │
+└──────────────────────┴─────────┴─────────┴───────────────────────┴───────────┴───────────┘
 
 ⚠  Forgetting detected in: coding
    Run model.rollback() to restore lost skills.
 ```
 
-Any category that drops more than the threshold (default **10%**) is flagged as `FORGOTTEN`.
+Each category is scored across **20 benchmark prompts** using **log-likelihood** — the model's own probability of generating the reference answer given the prompt. This is the same metric used by EleutherAI's lm-evaluation-harness and is far more sensitive to capability changes than embedding-based similarity.
+
+The **Cohen's d** column measures effect size (how large the forgetting is, not just whether it crossed a threshold):
+
+| Severity | Cohen's d | Meaning |
+|---|---|---|
+| `OK` | d ≥ 0 or negligible | No forgetting |
+| `MINOR` | \|d\| < 0.2 | Likely noise |
+| `MODERATE` | 0.2 ≤ \|d\| < 0.5 | Small-medium effect |
+| `SEVERE` | 0.5 ≤ \|d\| < 0.8 | Medium-large effect |
+| `CRITICAL` | \|d\| ≥ 0.8 | Large effect — act now |
+
+Any category that drops more than the threshold (default **10%**) is also tracked in `report.degraded_skills` for programmatic access.
 
 ### 3. Rollback
 
@@ -495,6 +508,7 @@ Model(
     max_length=512,
     device=None,               # auto-detects cuda → mps → cpu
     forgetting_threshold=0.10, # flag if any skill drops > 10%
+    scoring_method="log_likelihood",  # "log_likelihood" (default) or "cosine" (legacy)
     replay_buffer_size=500,    # past examples stored for replay (0 = disabled)
     replay_mix_ratio=0.3,      # fraction of each batch filled with replayed examples
 )

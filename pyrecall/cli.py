@@ -227,6 +227,13 @@ def init(
             help="Fraction of each training batch filled with replayed examples (0–1)",
         ),
     ] = 0.3,
+    scoring_method: Annotated[
+        str,
+        typer.Option(
+            "--scoring-method",
+            help="Benchmark scoring method: 'log_likelihood' (recommended) or 'cosine' (legacy)",
+        ),
+    ] = "log_likelihood",
 ) -> None:
     """Initialise pyrecall in the current project directory."""
     errors: list[str] = []
@@ -260,6 +267,10 @@ def init(
         errors.append(f"--replay-buffer-size must be >= 0, got {replay_buffer_size}")
     if not 0.0 <= replay_mix_ratio < 1.0:
         errors.append(f"--replay-mix-ratio must be in [0, 1), got {replay_mix_ratio}")
+    if scoring_method not in ("log_likelihood", "cosine"):
+        errors.append(
+            f"--scoring-method must be 'log_likelihood' or 'cosine', got '{scoring_method}'"
+        )
     if errors:
         for msg in errors:
             console.print(f"[red]Error:[/red] {msg}")
@@ -285,6 +296,7 @@ def init(
         "category_thresholds": parsed_category_thresholds,
         "replay_buffer_size": replay_buffer_size,
         "replay_mix_ratio": replay_mix_ratio,
+        "scoring_method": scoring_method,
         "created_at": datetime.now().isoformat(),
         "baseline_snapshot": None,
     }
@@ -414,6 +426,7 @@ def learn(
         forgetting_threshold=config.get("forgetting_threshold", 0.10),
         replay_buffer_size=config.get("replay_buffer_size", 500),
         replay_mix_ratio=config.get("replay_mix_ratio", 0.3),
+        scoring_method=config.get("scoring_method", "log_likelihood"),
     )
 
     tracker = _build_trackers(log_wandb, log_mlflow, log_neptune, neptune_project)
@@ -513,6 +526,7 @@ def snapshot(
         forgetting_threshold=config.get("forgetting_threshold", 0.10),
         replay_buffer_size=config.get("replay_buffer_size", 500),
         replay_mix_ratio=config.get("replay_mix_ratio", 0.3),
+        scoring_method=config.get("scoring_method", "log_likelihood"),
     )
     tracker = _build_trackers(log_wandb, log_mlflow, log_neptune, neptune_project)
     model_obj.snapshot(name=name, tracker=tracker)

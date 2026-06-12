@@ -44,7 +44,7 @@ class TestSkillScore:
     def test_to_dict_contains_all_keys(self) -> None:
         s = SkillScore(category="coding", prompt="p", response="r", score=0.5)
         d = s.to_dict()
-        assert set(d) == {"category", "prompt", "response", "score"}
+        assert set(d) == {"category", "prompt", "response", "score", "scoring_method"}
 
     def test_from_dict_coerces_score_to_float(self) -> None:
         s = SkillScore.from_dict({"category": "c", "prompt": "p", "response": "r", "score": "0.9"})

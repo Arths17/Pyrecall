@@ -15,7 +15,8 @@ class SkillScore:
     category: str
     prompt: str
     response: str
-    score: float  # cosine similarity normalised to [0, 1]
+    score: float  # in [0, 1]; interpretation depends on scoring_method
+    scoring_method: str = "log_likelihood"  # "log_likelihood" | "cosine"
 
     def to_dict(self) -> dict:
         return {
@@ -23,6 +24,7 @@ class SkillScore:
             "prompt": self.prompt,
             "response": self.response,
             "score": self.score,
+            "scoring_method": self.scoring_method,
         }
 
     @classmethod
@@ -32,6 +34,8 @@ class SkillScore:
             prompt=data["prompt"],
             response=data["response"],
             score=float(data["score"]),
+            # default "cosine" preserves backward compat with old snapshots
+            scoring_method=data.get("scoring_method", "cosine"),
         )
 
 

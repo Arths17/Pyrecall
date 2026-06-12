@@ -43,6 +43,8 @@ class CategoryComparison:
     category: str
     score_before: float
     score_after: float
+    cohen_d: float = 0.0  # paired Cohen's d across per-item deltas (negative = forgetting)
+    n_items: int = 0
 
     @property
     def delta(self) -> float:
@@ -55,6 +57,27 @@ class CategoryComparison:
         if self.score_before == 0.0:
             return 0.0
         return (self.score_after - self.score_before) / self.score_before * 100.0
+
+    @property
+    def severity(self) -> str:
+        """Human-readable forgetting severity based on Cohen's d effect size.
+
+        OK       — no meaningful drop
+        MINOR    — small effect (|d| < 0.2), possible noise
+        MODERATE — small-medium effect (0.2 ≤ |d| < 0.5)
+        SEVERE   — medium-large effect (0.5 ≤ |d| < 0.8)
+        CRITICAL — large effect (|d| ≥ 0.8)
+        """
+        if self.delta >= 0:
+            return "OK"
+        d = abs(self.cohen_d)
+        if d >= 0.8:
+            return "CRITICAL"
+        if d >= 0.5:
+            return "SEVERE"
+        if d >= 0.2:
+            return "MODERATE"
+        return "MINOR"
 
 
 @dataclass
@@ -116,6 +139,9 @@ class ForgettingReport:
                     "delta": round(c.delta, 4),
                     "pct_change": round(c.pct_change, 2),
                     "threshold": self._threshold_for(c.category),
+                    "cohen_d": round(c.cohen_d, 4),
+                    "n_items": c.n_items,
+                    "severity": c.severity,
                     "status": "FORGOTTEN"
                     if (c.score_before - c.score_after) > self._threshold_for(c.category)
                     else "OK",
@@ -152,23 +178,34 @@ class ForgettingReport:
         table.add_column("Before", justify="right")
         table.add_column("After", justify="right")
         table.add_column("Δ Score", justify="right")
-        table.add_column("Status", justify="center")
+        table.add_column("Cohen's d", justify="right")
+        table.add_column("Severity", justify="center")
+
+        _SEVERITY_MARKUP = {
+            "OK": "[green]   OK   [/green]",
+            "MINOR": "[dim yellow]  MINOR  [/dim yellow]",
+            "MODERATE": "[yellow] MODERATE [/yellow]",
+            "SEVERE": "[red]  SEVERE  [/red]",
+            "CRITICAL": "[bold red] CRITICAL [/bold red]",
+        }
 
         for comp in self.comparisons:
             cat_threshold = self._threshold_for(comp.category)
-            degraded = (comp.score_before - comp.score_after) > cat_threshold
             sign = "+" if comp.delta >= 0 else ""
             delta_str = f"{sign}{comp.delta:.3f} ({sign}{comp.pct_change:.1f}%)"
             delta_style = (
                 "red" if comp.delta < -cat_threshold else ("green" if comp.delta >= 0 else "yellow")
             )
-            status_markup = "[red]FORGOTTEN[/red]" if degraded else "[green]  OK  [/green]"
+            d_sign = "+" if comp.cohen_d >= 0 else ""
+            cohen_str = f"{d_sign}{comp.cohen_d:.2f}" if comp.n_items >= 2 else "n/a"
+            status_markup = _SEVERITY_MARKUP.get(comp.severity, comp.severity)
 
             table.add_row(
                 comp.category,
                 f"{comp.score_before:.3f}",
                 f"{comp.score_after:.3f}",
                 f"[{delta_style}]{delta_str}[/{delta_style}]",
+                cohen_str,
                 status_markup,
             )
 
@@ -257,16 +294,6 @@ class ForgettingDetector:
         before_scores = before.category_scores()
         after_scores = after.category_scores()
 
-        all_categories = sorted(set(before_scores) | set(after_scores))
-        comparisons = [
-            CategoryComparison(
-                category=cat,
-                score_before=before_scores.get(cat, 0.0),
-                score_after=after_scores.get(cat, 0.0),
-            )
-            for cat in all_categories
-        ]
-
         # Build per-prompt comparisons by matching on (category, prompt) key.
         before_map = {(s.category, s.prompt): s.score for s in before.scores}
         after_map = {(s.category, s.prompt): s.score for s in after.scores}
@@ -280,6 +307,45 @@ class ForgettingDetector:
             )
             for cat, prompt in all_keys
         ]
+
+        # Compute paired Cohen's d per category from per-item deltas.
+        cat_deltas: dict[str, list[float]] = {}
+        for pc in prompt_comparisons:
+            cat_deltas.setdefault(pc.category, []).append(pc.score_after - pc.score_before)
+
+        all_categories = sorted(set(before_scores) | set(after_scores))
+        comparisons = []
+        for cat in all_categories:
+            deltas = cat_deltas.get(cat, [])
+            n = len(deltas)
+            if n >= 2:
+                mean_d = sum(deltas) / n
+                variance = sum((d - mean_d) ** 2 for d in deltas) / (n - 1)
+                std_d = variance**0.5
+                cohen_d = mean_d / std_d if std_d > 0.0 else 0.0
+            else:
+                cohen_d = 0.0
+            comparisons.append(
+                CategoryComparison(
+                    category=cat,
+                    score_before=before_scores.get(cat, 0.0),
+                    score_after=after_scores.get(cat, 0.0),
+                    cohen_d=cohen_d,
+                    n_items=n,
+                )
+            )
+
+        # Warn when snapshots used different scoring methods.
+        before_methods = {s.scoring_method for s in before.scores}
+        after_methods = {s.scoring_method for s in after.scores}
+        if before_methods != after_methods:
+            from .utils import console as _c
+
+            _c.print(
+                "[warning]⚠  Snapshots used different scoring methods "
+                f"({before_methods} vs {after_methods}). "
+                "Scores are not directly comparable — retake one snapshot.[/warning]"
+            )
 
         return ForgettingReport(
             snapshot_before=before.name,

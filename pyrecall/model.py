@@ -26,7 +26,14 @@ from .replay import ReplayBuffer
 from .rollback import RollbackManager
 from .snapshot import SkillScore, SkillSnapshot
 from .trackers import SnapshotTracker
-from .utils import compute_embeddings, console, cosine_similarity, get_logger, safe_model_name
+from .utils import (
+    compute_embeddings,
+    compute_log_likelihood,
+    console,
+    cosine_similarity,
+    get_logger,
+    safe_model_name,
+)
 
 logger = get_logger(__name__)
 
@@ -94,6 +101,7 @@ class Model:
         max_length: int = 512,
         replay_buffer_size: int = 500,
         replay_mix_ratio: float = 0.3,
+        scoring_method: str = "log_likelihood",
     ) -> None:
         """
         Load *model_name* from HuggingFace Hub (or local cache) and wrap it with LoRA.
@@ -124,11 +132,18 @@ class Model:
                 "Example: Model('meta-llama/Llama-3.2-1B', strategy='qlora', load_in_4bit=True)"
             )
 
+        if scoring_method not in ("log_likelihood", "cosine"):
+            raise PyrecallError(
+                f"Unknown scoring_method '{scoring_method}'. "
+                "Use 'log_likelihood' (recommended) or 'cosine' (legacy)."
+            )
+
         self.model_name = model_name
         self.strategy = strategy
         self.device = device or self._best_device()
         self.learning_rate = learning_rate
         self.batch_size = batch_size
+        self.scoring_method = scoring_method
         self.max_length = max_length
         self._replay_mix_ratio = replay_mix_ratio
 
@@ -630,26 +645,37 @@ class Model:
                     description=(f"[{bench.category}] {bench.prompt[:55].rstrip()}…"),
                 )
 
-                response = self.generate(bench.prompt)
-                if not response.strip():
-                    response = "[no response]"
-
-                resp_emb = compute_embeddings(
-                    self.model,
-                    self.tokenizer,
-                    response,
-                    device=self.device,  # type: ignore[arg-type]
-                )
-                ref_emb = compute_embeddings(
-                    self.model,
-                    self.tokenizer,
-                    bench.reference_answer,
-                    device=self.device,  # type: ignore[arg-type]
-                )
-
-                # Shift cosine similarity from [-1, 1] → [0, 1]
-                raw_sim = cosine_similarity(resp_emb, ref_emb)
-                score = (raw_sim + 1.0) / 2.0
+                if self.scoring_method == "log_likelihood":
+                    score = compute_log_likelihood(
+                        self.model,
+                        self.tokenizer,
+                        bench.prompt,
+                        bench.reference_answer,
+                        device=self.device,  # type: ignore[arg-type]
+                        max_length=self.max_length,
+                    )
+                    # Still generate for human-readable storage / --verbose display
+                    response = self.generate(bench.prompt)
+                    if not response.strip():
+                        response = "[no response]"
+                else:
+                    response = self.generate(bench.prompt)
+                    if not response.strip():
+                        response = "[no response]"
+                    resp_emb = compute_embeddings(
+                        self.model,
+                        self.tokenizer,
+                        response,
+                        device=self.device,  # type: ignore[arg-type]
+                    )
+                    ref_emb = compute_embeddings(
+                        self.model,
+                        self.tokenizer,
+                        bench.reference_answer,
+                        device=self.device,  # type: ignore[arg-type]
+                    )
+                    raw_sim = cosine_similarity(resp_emb, ref_emb)
+                    score = (raw_sim + 1.0) / 2.0
 
                 scores.append(
                     SkillScore(
@@ -657,6 +683,7 @@ class Model:
                         prompt=bench.prompt,
                         response=response,
                         score=score,
+                        scoring_method=self.scoring_method,
                     )
                 )
 

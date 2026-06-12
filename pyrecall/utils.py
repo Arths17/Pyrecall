@@ -1,8 +1,9 @@
-"""Internal helpers: embeddings, cosine similarity, logging, rich console."""
+"""Internal helpers: embeddings, cosine similarity, log-likelihood, logging, rich console."""
 
 from __future__ import annotations
 
 import logging
+import math
 from typing import TYPE_CHECKING
 
 import torch
@@ -80,6 +81,59 @@ def compute_embeddings(
 def cosine_similarity(a: torch.Tensor, b: torch.Tensor) -> float:
     """Return cosine similarity between two 1-D embedding vectors, in range [-1, 1]."""
     return F.cosine_similarity(a.unsqueeze(0), b.unsqueeze(0)).item()
+
+
+def compute_log_likelihood(
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+    prompt: str,
+    completion: str,
+    device: str = "cpu",
+    max_length: int = 512,
+) -> float:
+    """Return the per-token log-likelihood of *completion* given *prompt*.
+
+    Specifically: exp(-mean_NLL_per_completion_token) ∈ (0, 1].
+    Higher = model assigns higher probability to the reference answer = less forgetting.
+
+    Uses a single causal-LM forward pass with the prompt tokens masked out of the
+    loss so only the completion tokens contribute to the NLL.
+    """
+    prompt_enc = tokenizer(
+        prompt,
+        return_tensors="pt",
+        truncation=True,
+        max_length=max_length,
+        add_special_tokens=True,
+    )
+    full_enc = tokenizer(
+        prompt + completion,
+        return_tensors="pt",
+        truncation=True,
+        max_length=max_length,
+        add_special_tokens=True,
+    )
+
+    prompt_len = prompt_enc["input_ids"].shape[1]
+    input_ids = full_enc["input_ids"].to(device)
+    attention_mask = full_enc["attention_mask"].to(device)
+
+    # Labels: -100 masks prompt tokens so they don't contribute to loss.
+    labels = input_ids.clone()
+    labels[0, :prompt_len] = -100
+
+    with torch.no_grad():
+        outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+        )
+
+    mean_nll: float = outputs.loss.item()
+    # Guard against degenerate NLL (e.g. all tokens masked → loss = 0)
+    if mean_nll <= 0.0:
+        return 1.0
+    return math.exp(-mean_nll)
 
 
 def safe_model_name(model_name: str) -> str:

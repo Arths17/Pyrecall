@@ -406,3 +406,134 @@ class TestPerCategoryThresholds:
         after = _make_snapshot("after", {"coding": 0.80})
         report = detector.compare(before, after)
         assert report.category_thresholds == cat_thresh
+
+
+# ── Cohen's d and severity levels ────────────────────────────────────────────
+
+
+def _make_snapshot_with_items(name: str, scores_per_cat: dict[str, list[float]]) -> SkillSnapshot:
+    """Build a SkillSnapshot with multiple SkillScore items per category."""
+    skill_scores = [
+        SkillScore(
+            category=cat,
+            prompt=f"Prompt {cat} {i}",
+            response=f"Response {cat} {i}",
+            score=score,
+        )
+        for cat, vals in scores_per_cat.items()
+        for i, score in enumerate(vals)
+    ]
+    return SkillSnapshot(
+        name=name,
+        model_name="test/model",
+        created_at=datetime(2024, 1, 1),
+        scores=skill_scores,
+    )
+
+
+class TestCohensD:
+    def test_cohen_d_zero_when_no_change(self) -> None:
+        scores = [0.8, 0.75, 0.82, 0.78, 0.80]
+        before = _make_snapshot_with_items("b", {"coding": scores})
+        after = _make_snapshot_with_items("a", {"coding": scores})
+        report = ForgettingDetector().compare(before, after)
+        comp = next(c for c in report.comparisons if c.category == "coding")
+        assert comp.cohen_d == pytest.approx(0.0)
+
+    def test_cohen_d_negative_when_scores_drop(self) -> None:
+        before = _make_snapshot_with_items("b", {"coding": [0.9, 0.85, 0.88, 0.91, 0.87]})
+        after = _make_snapshot_with_items("a", {"coding": [0.7, 0.65, 0.68, 0.71, 0.67]})
+        report = ForgettingDetector().compare(before, after)
+        comp = next(c for c in report.comparisons if c.category == "coding")
+        assert comp.cohen_d < 0.0
+
+    def test_cohen_d_positive_when_scores_improve(self) -> None:
+        before = _make_snapshot_with_items("b", {"coding": [0.6, 0.62, 0.58, 0.61, 0.59]})
+        after = _make_snapshot_with_items("a", {"coding": [0.9, 0.88, 0.91, 0.87, 0.89]})
+        report = ForgettingDetector().compare(before, after)
+        comp = next(c for c in report.comparisons if c.category == "coding")
+        assert comp.cohen_d > 0.0
+
+    def test_n_items_stored_on_comparison(self) -> None:
+        before = _make_snapshot_with_items("b", {"coding": [0.8, 0.82, 0.79, 0.81, 0.80]})
+        after = _make_snapshot_with_items("a", {"coding": [0.78, 0.80, 0.77, 0.79, 0.78]})
+        report = ForgettingDetector().compare(before, after)
+        comp = next(c for c in report.comparisons if c.category == "coding")
+        assert comp.n_items == 5
+
+    def test_cohen_d_zero_when_single_item(self) -> None:
+        before = _make_snapshot_with_items("b", {"coding": [0.8]})
+        after = _make_snapshot_with_items("a", {"coding": [0.6]})
+        report = ForgettingDetector().compare(before, after)
+        comp = next(c for c in report.comparisons if c.category == "coding")
+        assert comp.cohen_d == pytest.approx(0.0)
+
+
+class TestSeverityLevels:
+    def test_ok_when_no_drop(self) -> None:
+        c = CategoryComparison(
+            category="coding", score_before=0.8, score_after=0.8, cohen_d=0.0, n_items=5
+        )
+        assert c.severity == "OK"
+
+    def test_ok_when_improvement(self) -> None:
+        c = CategoryComparison(
+            category="coding", score_before=0.7, score_after=0.85, cohen_d=1.2, n_items=5
+        )
+        assert c.severity == "OK"
+
+    def test_minor_when_small_effect(self) -> None:
+        c = CategoryComparison(
+            category="coding", score_before=0.8, score_after=0.79, cohen_d=-0.15, n_items=5
+        )
+        assert c.severity == "MINOR"
+
+    def test_moderate_when_medium_effect(self) -> None:
+        c = CategoryComparison(
+            category="coding", score_before=0.8, score_after=0.74, cohen_d=-0.35, n_items=10
+        )
+        assert c.severity == "MODERATE"
+
+    def test_severe_when_large_medium_effect(self) -> None:
+        c = CategoryComparison(
+            category="coding", score_before=0.8, score_after=0.65, cohen_d=-0.65, n_items=10
+        )
+        assert c.severity == "SEVERE"
+
+    def test_critical_when_very_large_effect(self) -> None:
+        c = CategoryComparison(
+            category="coding", score_before=0.8, score_after=0.50, cohen_d=-1.1, n_items=10
+        )
+        assert c.severity == "CRITICAL"
+
+    def test_severity_in_to_dict(self) -> None:
+        before = _make_snapshot_with_items("b", {"coding": [0.9] * 10})
+        after = _make_snapshot_with_items("a", {"coding": [0.5] * 10})
+        report = ForgettingDetector().compare(before, after)
+        comp_dict = next(c for c in report.to_dict()["comparisons"] if c["category"] == "coding")
+        assert "severity" in comp_dict
+        assert comp_dict["severity"] in ("OK", "MINOR", "MODERATE", "SEVERE", "CRITICAL")
+
+    def test_cohen_d_in_to_dict(self) -> None:
+        before = _make_snapshot_with_items("b", {"coding": [0.8] * 5})
+        after = _make_snapshot_with_items("a", {"coding": [0.8] * 5})
+        report = ForgettingDetector().compare(before, after)
+        comp_dict = next(c for c in report.to_dict()["comparisons"] if c["category"] == "coding")
+        assert "cohen_d" in comp_dict
+        assert isinstance(comp_dict["cohen_d"], float)
+
+
+class TestBenchmarkCount:
+    def test_default_benchmarks_total_160(self) -> None:
+        from pyrecall.benchmarks.default import DEFAULT_BENCHMARKS
+
+        assert len(DEFAULT_BENCHMARKS) == 160
+
+    def test_each_category_has_20_items(self) -> None:
+        from collections import Counter
+
+        from pyrecall.benchmarks.default import CATEGORIES, DEFAULT_BENCHMARKS
+
+        counts = Counter(b.category for b in DEFAULT_BENCHMARKS)
+        for cat in CATEGORIES:
+            assert counts[cat] == 20, f"{cat} has {counts[cat]} items, expected 20"
