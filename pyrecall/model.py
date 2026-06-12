@@ -255,7 +255,6 @@ class Model:
         snap = SkillSnapshot(name=name, model_name=self.model_name, scores=scores)
         self.rollback_manager.save(snap, self.model)
 
-        self._baseline_snapshot_name = name
         self._set_baseline(name)
 
         console.print(
@@ -531,57 +530,37 @@ class Model:
 
         console.print(f"[info]Rolling back to snapshot '{to}'…[/info]")
 
-        # ── 1. Load snapshot metadata ─────────────────────────────────────────────
+        # ── 1. Validate snapshot before touching the model ────────────────────────
         snap = self.rollback_manager.load_snapshot(to)
+        if snap.adapter_path is None:
+            raise PyrecallError(f"Snapshot '{to}' is missing adapter metadata.")
+        if not snap.adapter_path.exists():
+            raise PyrecallError(
+                f"Adapter weights not found for snapshot '{to}' at {snap.adapter_path}"
+            )
+
+        # ── 2. Load new model (do this before deleting old one) ───────────────────
         dtype = torch.float16 if self.device == "cuda" else torch.float32
         base_model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype=dtype,
             device_map=None if self.device != "cuda" else "auto",
         )
-        if not snap or snap.adapter_path is None:
-            raise PyrecallError(f"Snapshot '{to}' is invalid or missing adapter metadata.")
-
-        if not snap.adapter_path.exists():
-            raise PyrecallError(
-                f"Adapter weights not found for snapshot '{to}' at {snap.adapter_path}"
-            )
-
-        # ── 2. Clear current model safely ─────────────────────────────────────────
-        # Prevent GPU memory leaks from old PEFT wrappers
         new_model = PeftModel.from_pretrained(
             base_model, str(snap.adapter_path), is_trainable=False
         )
         if self.device not in ("cuda",):
             new_model = new_model.to(self.device)
-        del self.model  # safe to del now
+
+        # ── 3. Swap — only delete old model after new one is ready ────────────────
+        del self.model
         self.model = new_model
+        self.model.eval()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        # ── 4. Load LoRA adapter ───────────────────────────────────────────────────
-        model = PeftModel.from_pretrained(
-            base_model,
-            str(snap.adapter_path),
-            is_trainable=False,
-        )
-
-        # ── 5. Move to correct device (safe + explicit) ───────────────────────────
-        if self.device == "cpu":
-            model = model.to("cpu")
-        elif self.device == "mps":
-            model = model.to("mps")
-
-        self.model = model
-        self.model.eval()
-
-        # ── 6. Reset baseline tracking (single source of truth) ───────────────────
+        # ── 4. Persist baseline ───────────────────────────────────────────────────
         self._set_baseline(to)
-        # persist baseline to disk for CLI + future sessions
-        try:
-            self._baseline_file.write_text(to + "\n")
-        except Exception:
-            pass
 
         console.print(f"[success]✓ Rolled back to '{to}'[/success]")
 
@@ -707,7 +686,7 @@ class Model:
 
     # ── private helpers ────────────────────────────────────────────────────────
     def _set_baseline(self, name: str) -> None:
-        # REQUIRED for CLI persistence
+        self._baseline_snapshot_name = name
         try:
             self._baseline_file.write_text(name)
         except Exception:
