@@ -83,6 +83,10 @@ class Model:
             model.rollback(to="before_v1")
     """
 
+    rollback_manager: RollbackManager
+    _baseline_file: Path
+    _baseline_snapshot_name: str | None
+
     def __init__(
         self,
         model_name: str,
@@ -139,6 +143,7 @@ class Model:
             )
         self.base_dir = snapshot_dir or (Path.home() / ".pyrecall")
         self._baseline_snapshot_name: str | None = None
+        self._baseline_file = self.rollback_manager.base_dir / ".current_baseline"
         self.base_dir.mkdir(parents=True, exist_ok=True)
         # load persisted baseline if it exists
         self.model_name = model_name
@@ -219,12 +224,8 @@ class Model:
             f"({n_trainable / n_total:.2%}).[/success]"
         )
 
-        try:
-            baseline_file = self.base_dir / ".current_baseline"
-            if baseline_file.exists():
-                self._baseline_snapshot_name = baseline_file.read_text().strip() or None
-        except Exception:
-            self._baseline_snapshot_name = None
+        if self._baseline_file.exists():
+            self._baseline_snapshot_name = self._baseline_file.read_text().strip() or None
 
     # ── public API ─────────────────────────────────────────────────────────────
 
@@ -478,12 +479,6 @@ class Model:
         after = SkillSnapshot(name=after_name, model_name=self.model_name, scores=after_scores)
         after.save(self.rollback_manager.base_dir / after_name)
 
-        if self._baseline_snapshot_name is None:
-            raise PyrecallError(
-                "No baseline snapshot found.\n"
-                "Call model.snapshot(name='before_v1') before fine-tuning."
-            )
-
         report = self.detector.compare(before, after)
         report.print()
         return report
@@ -539,7 +534,12 @@ class Model:
 
         # ── 1. Load snapshot metadata ─────────────────────────────────────────────
         snap = self.rollback_manager.load_snapshot(to)
-
+        dtype = torch.float16 if self.device == "cuda" else torch.float32
+        base_model = AutoModelForCausalLM.from_pretrained(
+            self.model_name,
+            torch_dtype=dtype,
+            device_map=None if self.device != "cuda" else "auto",
+        )
         if not snap or snap.adapter_path is None:
             raise PyrecallError(f"Snapshot '{to}' is invalid or missing adapter metadata.")
 
@@ -550,18 +550,15 @@ class Model:
 
         # ── 2. Clear current model safely ─────────────────────────────────────────
         # Prevent GPU memory leaks from old PEFT wrappers
-        del self.model
+        new_model = PeftModel.from_pretrained(
+            base_model, str(snap.adapter_path), is_trainable=False
+        )
+        if self.device not in ("cuda",):
+            new_model = new_model.to(self.device)
+        del self.model  # safe to del now
+        self.model = new_model
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-
-        # ── 3. Reload base model (clean slate) ────────────────────────────────────
-        dtype = torch.float16 if self.device == "cuda" else torch.float32
-
-        base_model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype=dtype,
-            device_map=None if self.device != "cuda" else "auto",
-        )
 
         # ── 4. Load LoRA adapter ───────────────────────────────────────────────────
         model = PeftModel.from_pretrained(
@@ -583,8 +580,7 @@ class Model:
         self._set_baseline(to)
         # persist baseline to disk for CLI + future sessions
         try:
-            baseline_file = self.base_dir / ".current_baseline"
-            baseline_file.write_text(to + "\n")
+            self._baseline_file.write_text(to + "\n")
         except Exception:
             pass
 
@@ -712,12 +708,9 @@ class Model:
 
     # ── private helpers ────────────────────────────────────────────────────────
     def _set_baseline(self, name: str) -> None:
-        self._baseline_snapshot_name = name
-        self.rollback_manager.save_baseline(name)
-
         # REQUIRED for CLI persistence
         try:
-            (self.base_dir / ".current_baseline").write_text(name)
+            self._baseline_file.write_text(name)
         except Exception:
             pass
 

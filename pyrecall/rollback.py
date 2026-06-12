@@ -111,6 +111,3 @@ class RollbackManager:
             for d in sorted(self.base_dir.iterdir())
             if d.is_dir() and (d / "snapshot.json").exists()
         ]
-
-    def save_baseline(self, model_state):
-        self._baseline = model_state
