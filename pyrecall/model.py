@@ -348,17 +348,14 @@ class Model:
                     "Rename your training text column to 'text', "
                     "or ensure at least one column contains text."
                 )
-
-        # Make sure the dataset actually contains rows.
         # Make sure dataset actually has usable rows
         try:
-            # safer check for HuggingFace Dataset + mocks
-            if dataset.num_rows == 0:
-                raise PyrecallError(f"Training data '{data_path}' is empty.")
-        except Exception:
-            # fallback for mocked datasets
-            if len(dataset) == 0:
-                raise PyrecallError(f"Training data '{data_path}' is empty.")
+            row_count = dataset.num_rows
+        except AttributeError:
+            row_count = len(dataset)
+
+        if row_count == 0:
+            raise PyrecallError(f"Training data '{data_path}' is empty.")
         # Collect the raw new texts now (before any mixing) so we can add them
         # to the replay buffer after training without including replayed examples.
         new_texts: list[str] = dataset[text_col] if self.replay_buffer is not None else []
