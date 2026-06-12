@@ -66,9 +66,9 @@ class ReplayBuffer:
                 if j < self._max_size:
                     self._buffer[j] = text
         if duplicates:
-            logger.warning(
-                "ReplayBuffer.add(): skipped %d duplicate example(s). "
-                "Call learn() on the same data twice? replay_mix_ratio may be unreliable.",
+            logger.debug(
+                "ReplayBuffer.add(): skipped %d duplicate example(s) "
+                "(same data seen before — replay_mix_ratio reflects unique examples only).",
                 duplicates,
             )
         self._save()
@@ -96,7 +96,12 @@ class ReplayBuffer:
 
     @property
     def total_seen(self) -> int:
-        """Total number of examples ever passed to :meth:`add`."""
+        """Total number of *unique* examples ever accepted by :meth:`add`.
+
+        Duplicates are excluded intentionally: this counter drives reservoir
+        sampling probability, so counting only unique texts keeps the sampling
+        distribution honest even when the same file is learned more than once.
+        """
         return self._total_seen
 
     # ── persistence ────────────────────────────────────────────────────────────

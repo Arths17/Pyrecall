@@ -144,14 +144,15 @@ class TestReplayBufferDeduplication:
         buf2.add(["hello", "new"])  # "hello" already in persisted buffer
         assert len(buf2) == 3  # hello + world + new, not 4
 
-    def test_duplicate_warning_is_logged(self, tmp_path: Path) -> None:
+    def test_duplicate_is_logged_at_debug(self, tmp_path: Path) -> None:
         from pyrecall.replay import ReplayBuffer
 
         buf = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
         buf.add(["dup"])
         with patch("pyrecall.replay.logger") as mock_logger:
             buf.add(["dup"])
-            mock_logger.warning.assert_called_once()
+            mock_logger.debug.assert_called_once()
+            mock_logger.warning.assert_not_called()
 
     def test_clear_resets_deduplication(self, tmp_path: Path) -> None:
         from pyrecall.replay import ReplayBuffer
