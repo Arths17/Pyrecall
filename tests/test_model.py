@@ -275,7 +275,7 @@ class TestModelConstructorDefaults:
             mock_dataset = MagicMock()
             mock_dataset.column_names = ["text"]
             mock_dataset.__len__.return_value = 1
-            mock_dataset.__getitem__.return_value = ["hello world"]  
+            mock_dataset.__getitem__.return_value = ["hello world"]
             mock_dataset.map.return_value = mock_dataset
             mock_ds.return_value = mock_dataset
 
@@ -307,6 +307,7 @@ class TestModelConstructorDefaults:
         ):
             mock_dataset = MagicMock()
             mock_dataset.column_names = ["text"]
+            mock_dataset.__len__.return_value = 1
             mock_dataset.map.return_value = mock_dataset
             mock_ds.return_value = mock_dataset
 
@@ -337,6 +338,7 @@ class TestModelLearn:
         ):
             mock_dataset = MagicMock()
             mock_dataset.column_names = ["text"]
+            mock_dataset.__len__.return_value = 1
             mock_dataset.map.return_value = mock_dataset
             mock_ds.return_value = mock_dataset
 
@@ -357,6 +359,7 @@ class TestLearnDataFormats:
         ):
             mock_dataset = MagicMock()
             mock_dataset.column_names = ["text"]
+            mock_dataset.__len__.return_value = 1
             mock_dataset.map.return_value = mock_dataset
             mock_ds.return_value = mock_dataset
 
@@ -521,6 +524,7 @@ class TestResumeTraining:
         ):
             mock_dataset = MagicMock()
             mock_dataset.column_names = ["text"]
+            mock_dataset.__len__.return_value = 1
             mock_dataset.map.return_value = mock_dataset
             mock_ds.return_value = mock_dataset
 
@@ -545,6 +549,7 @@ class TestResumeTraining:
         ):
             mock_dataset = MagicMock()
             mock_dataset.column_names = ["text"]
+            mock_dataset.__len__.return_value = 1
             mock_dataset.map.return_value = mock_dataset
             mock_ds.return_value = mock_dataset
 
@@ -565,6 +570,7 @@ class TestResumeTraining:
         ):
             mock_dataset = MagicMock()
             mock_dataset.column_names = ["text"]
+            mock_dataset.__len__.return_value = 1
             mock_dataset.map.return_value = mock_dataset
             mock_ds.return_value = mock_dataset
 
