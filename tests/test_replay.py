@@ -117,6 +117,53 @@ class TestReplayBufferPersistence:
         assert buf.total_seen == 0
 
 
+class TestReplayBufferDeduplication:
+    def test_duplicate_texts_not_added(self, tmp_path: Path) -> None:
+        from pyrecall.replay import ReplayBuffer
+
+        buf = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
+        buf.add(["alpha", "beta", "gamma"])
+        buf.add(["alpha", "beta"])  # duplicates — should be skipped
+        assert len(buf) == 3
+
+    def test_total_seen_excludes_duplicates(self, tmp_path: Path) -> None:
+        from pyrecall.replay import ReplayBuffer
+
+        buf = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
+        buf.add(["x", "y"])
+        buf.add(["x", "z"])  # "x" is a duplicate
+        assert buf.total_seen == 3  # only 3 unique texts
+
+    def test_deduplication_persists_across_instances(self, tmp_path: Path) -> None:
+        from pyrecall.replay import ReplayBuffer
+
+        buf1 = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
+        buf1.add(["hello", "world"])
+
+        buf2 = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
+        buf2.add(["hello", "new"])  # "hello" already in persisted buffer
+        assert len(buf2) == 3  # hello + world + new, not 4
+
+    def test_duplicate_is_logged_at_debug(self, tmp_path: Path) -> None:
+        from pyrecall.replay import ReplayBuffer
+
+        buf = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
+        buf.add(["dup"])
+        with patch("pyrecall.replay.logger") as mock_logger:
+            buf.add(["dup"])
+            mock_logger.debug.assert_called_once()
+            mock_logger.warning.assert_not_called()
+
+    def test_clear_resets_deduplication(self, tmp_path: Path) -> None:
+        from pyrecall.replay import ReplayBuffer
+
+        buf = ReplayBuffer("test/model", max_size=10, base_dir=tmp_path)
+        buf.add(["foo", "bar"])
+        buf.clear()
+        buf.add(["foo", "bar"])  # after clear, these should be accepted again
+        assert len(buf) == 2
+
+
 class TestReplayBufferClear:
     def test_clear_empties_buffer(self, tmp_path: Path) -> None:
         from pyrecall.replay import ReplayBuffer

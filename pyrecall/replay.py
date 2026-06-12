@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -38,6 +39,7 @@ class ReplayBuffer:
         self._max_size = max_size
         self._buffer: list[str] = []
         self._total_seen: int = 0
+        self._seen_hashes: set[str] = set()
 
         root = base_dir or Path.home() / ".pyrecall" / "replay"
         self._path = root / safe_model_name(model_name) / _BUFFER_FILE
@@ -48,8 +50,14 @@ class ReplayBuffer:
     # ── public API ─────────────────────────────────────────────────────────────
 
     def add(self, examples: list[str]) -> None:
-        """Add *examples* to the buffer using reservoir sampling."""
+        """Add *examples* to the buffer using reservoir sampling, skipping duplicates."""
+        duplicates = 0
         for text in examples:
+            h = hashlib.sha256(text.encode()).hexdigest()
+            if h in self._seen_hashes:
+                duplicates += 1
+                continue
+            self._seen_hashes.add(h)
             self._total_seen += 1
             if len(self._buffer) < self._max_size:
                 self._buffer.append(text)
@@ -57,6 +65,12 @@ class ReplayBuffer:
                 j = random.randint(0, self._total_seen - 1)
                 if j < self._max_size:
                     self._buffer[j] = text
+        if duplicates:
+            logger.debug(
+                "ReplayBuffer.add(): skipped %d duplicate example(s) "
+                "(same data seen before — replay_mix_ratio reflects unique examples only).",
+                duplicates,
+            )
         self._save()
 
     def sample(self, n: int) -> list[str]:
@@ -70,6 +84,7 @@ class ReplayBuffer:
         """Empty the buffer and reset counters."""
         self._buffer = []
         self._total_seen = 0
+        self._seen_hashes = set()
         self._save()
 
     def __len__(self) -> int:
@@ -81,7 +96,12 @@ class ReplayBuffer:
 
     @property
     def total_seen(self) -> int:
-        """Total number of examples ever passed to :meth:`add`."""
+        """Total number of *unique* examples ever accepted by :meth:`add`.
+
+        Duplicates are excluded intentionally: this counter drives reservoir
+        sampling probability, so counting only unique texts keeps the sampling
+        distribution honest even when the same file is learned more than once.
+        """
         return self._total_seen
 
     # ── persistence ────────────────────────────────────────────────────────────
@@ -105,7 +125,9 @@ class ReplayBuffer:
             # Trim to current max_size in case the config changed.
             if len(self._buffer) > self._max_size:
                 self._buffer = self._buffer[: self._max_size]
+            self._seen_hashes = {hashlib.sha256(t.encode()).hexdigest() for t in self._buffer}
         except Exception as exc:
             logger.warning("Could not load replay buffer from %s: %s", self._path, exc)
             self._buffer = []
             self._total_seen = 0
+            self._seen_hashes = set()
