@@ -835,6 +835,152 @@ class TestCheckJson:
         assert result.exit_code == 2
 
 
+# ── check --watch ─────────────────────────────────────────────────────────────
+
+
+class TestCheckWatch:
+    """Tests for `pyrecall check --watch`."""
+
+    def test_watch_exits_zero_when_healthy_on_ctrl_c(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        snap_a = _make_snapshot("before", {"coding": 0.80})
+        snap_b = _make_snapshot("after", {"coding": 0.82})
+        mgr = _make_mock_manager(snapshots=[snap_a, snap_b])
+
+        with (
+            patch("pyrecall.rollback.RollbackManager", return_value=mgr),
+            patch("pyrecall.cli.time") as mock_time,
+        ):
+            mock_time.sleep.side_effect = KeyboardInterrupt
+            result = runner.invoke(app, ["check", "--watch", "--interval", "1"])
+
+        assert result.exit_code == 0
+
+    def test_watch_exits_two_when_forgetting_on_ctrl_c(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        snap_a = _make_snapshot("before", {"coding": 0.90})
+        snap_b = _make_snapshot("after", {"coding": 0.50})
+        mgr = _make_mock_manager(snapshots=[snap_a, snap_b])
+
+        with (
+            patch("pyrecall.rollback.RollbackManager", return_value=mgr),
+            patch("pyrecall.cli.time") as mock_time,
+        ):
+            mock_time.sleep.side_effect = KeyboardInterrupt
+            result = runner.invoke(app, ["check", "--watch", "--interval", "1"])
+
+        assert result.exit_code == 2
+
+    def test_watch_prints_healthy_status_line(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        snap_a = _make_snapshot("before", {"coding": 0.80})
+        snap_b = _make_snapshot("after", {"coding": 0.82})
+        mgr = _make_mock_manager(snapshots=[snap_a, snap_b])
+
+        with (
+            patch("pyrecall.rollback.RollbackManager", return_value=mgr),
+            patch("pyrecall.cli.time") as mock_time,
+        ):
+            mock_time.sleep.side_effect = KeyboardInterrupt
+            result = runner.invoke(app, ["check", "--watch", "--interval", "1"])
+
+        assert "healthy" in result.output
+        assert "before" in result.output
+        assert "after" in result.output
+
+    def test_watch_prints_degraded_status_line(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        snap_a = _make_snapshot("before", {"coding": 0.90})
+        snap_b = _make_snapshot("after", {"coding": 0.50})
+        mgr = _make_mock_manager(snapshots=[snap_a, snap_b])
+
+        with (
+            patch("pyrecall.rollback.RollbackManager", return_value=mgr),
+            patch("pyrecall.cli.time") as mock_time,
+        ):
+            mock_time.sleep.side_effect = KeyboardInterrupt
+            result = runner.invoke(app, ["check", "--watch", "--interval", "1"])
+
+        assert "DEGRADED" in result.output
+        assert "coding" in result.output
+
+    def test_watch_rejects_interval_less_than_one(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("a"), _make_snapshot("b")])
+
+        with patch("pyrecall.rollback.RollbackManager", return_value=mgr):
+            result = runner.invoke(app, ["check", "--watch", "--interval", "0"])
+
+        assert result.exit_code == 1
+        assert "interval" in result.output.lower()
+
+    def test_watch_waits_when_fewer_than_two_snapshots(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        mgr = _make_mock_manager(snapshots=[_make_snapshot("only_one")])
+
+        with (
+            patch("pyrecall.rollback.RollbackManager", return_value=mgr),
+            patch("pyrecall.cli.time") as mock_time,
+        ):
+            mock_time.sleep.side_effect = KeyboardInterrupt
+            result = runner.invoke(app, ["check", "--watch", "--interval", "1"])
+
+        assert result.exit_code == 0
+        assert "1/2" in result.output
+
+    def test_watch_skips_check_when_mtime_unchanged(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Second iteration with the same mtime should not re-run the check."""
+        monkeypatch.chdir(tmp_path)
+        _write_config(tmp_path)
+        snap_a = _make_snapshot("before", {"coding": 0.80})
+        snap_b = _make_snapshot("after", {"coding": 0.82})
+        mgr = _make_mock_manager(snapshots=[snap_a, snap_b])
+
+        # Return a fixed mtime so both iterations see the same fingerprint.
+        mock_snap_file = MagicMock()
+        mock_snap_file.stat.return_value.st_mtime = 1000.0
+        mgr.base_dir.rglob.return_value = [mock_snap_file]
+
+        sleep_calls = 0
+
+        def _sleep_side_effect(_: int) -> None:
+            nonlocal sleep_calls
+            sleep_calls += 1
+            if sleep_calls >= 2:
+                raise KeyboardInterrupt
+
+        with (
+            patch("pyrecall.rollback.RollbackManager", return_value=mgr),
+            patch("pyrecall.cli.time") as mock_time,
+        ):
+            mock_time.sleep.side_effect = _sleep_side_effect
+            runner.invoke(app, ["check", "--watch", "--interval", "1"])
+
+        # list_snapshots only called on the first iteration (mtime changed).
+        # Second iteration sees same mtime and skips straight to sleep.
+        assert mgr.list_snapshots.call_count == 1
+
+
 # ── diff ──────────────────────────────────────────────────────────────────────
 
 

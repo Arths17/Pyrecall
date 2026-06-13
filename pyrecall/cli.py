@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated
@@ -612,6 +613,25 @@ def check(
             help="Save the report to a file. Format inferred from extension: .html, .md, or .json.",
         ),
     ] = None,
+    watch: Annotated[
+        bool,
+        typer.Option(
+            "--watch",
+            "-w",
+            help=(
+                "Poll the snapshot directory and re-run the check whenever a new snapshot appears. "
+                "Exits with code 2 if the last check detected forgetting, 0 otherwise. "
+                "Stop with Ctrl-C."
+            ),
+        ),
+    ] = False,
+    interval: Annotated[
+        int,
+        typer.Option(
+            "--interval",
+            help="Seconds between polls when using --watch (default: 60).",
+        ),
+    ] = 60,
 ) -> None:
     """
     Compare two snapshots to detect forgotten skills.
@@ -629,36 +649,13 @@ def check(
         pyrecall check --output report.html
         pyrecall check --output report.md
         pyrecall check --output report.json
+
+    Use --watch to poll continuously (useful during long training runs):
+
+        pyrecall check --watch --interval 30
     """
     config = _read_config()
     mgr = _build_rollback_manager(config)
-    all_snaps = mgr.list_snapshots()
-
-    if len(all_snaps) < 2:
-        console.print(
-            "[red]Error:[/red] Need at least two snapshots to run a forgetting check.\n"
-            "Run [bold]pyrecall snapshot <name>[/bold] to create snapshots."
-        )
-        raise typer.Exit(1)
-
-    if before is None and after is None:
-        # Compare the last two chronologically.
-        snap_before = all_snaps[-2]
-        snap_after = all_snaps[-1]
-    else:
-        if before is None or after is None:
-            console.print("[red]Error:[/red] Provide both --before and --after, or neither.")
-            raise typer.Exit(1)
-        try:
-            snap_before = mgr.load_snapshot(before)
-        except FileNotFoundError:
-            console.print(f"[red]Error:[/red] Snapshot '{before}' not found.")
-            raise typer.Exit(1)
-        try:
-            snap_after = mgr.load_snapshot(after)
-        except FileNotFoundError:
-            console.print(f"[red]Error:[/red] Snapshot '{after}' not found.")
-            raise typer.Exit(1)
 
     from pyrecall.detector import ForgettingDetector
 
@@ -677,23 +674,138 @@ def check(
     detector = ForgettingDetector(
         threshold=effective_threshold, category_thresholds=effective_cat_thresholds
     )
-    report = detector.compare(snap_before, snap_after)
 
-    if json_output:
-        typer.echo(report.to_json())
-    else:
-        report.print(verbose=verbose)
+    def _run_once() -> int:
+        """Run a single check pass. Returns 0 (healthy) or 2 (forgetting detected)."""
+        all_snaps = mgr.list_snapshots()
+        if len(all_snaps) < 2:
+            console.print(
+                "[red]Error:[/red] Need at least two snapshots to run a forgetting check.\n"
+                "Run [bold]pyrecall snapshot <name>[/bold] to create snapshots."
+            )
+            return 1
 
-    if output:
-        try:
-            report.save(output)
-            console.print(f"[dim]Report saved to {output}[/dim]")
-        except ValueError as exc:
-            console.print(f"[red]Error:[/red] {exc}")
-            raise typer.Exit(1)
+        if before is None and after is None:
+            snap_before = all_snaps[-2]
+            snap_after = all_snaps[-1]
+        else:
+            if before is None or after is None:
+                console.print("[red]Error:[/red] Provide both --before and --after, or neither.")
+                return 1
+            try:
+                snap_before = mgr.load_snapshot(before)
+            except FileNotFoundError:
+                console.print(f"[red]Error:[/red] Snapshot '{before}' not found.")
+                return 1
+            try:
+                snap_after = mgr.load_snapshot(after)
+            except FileNotFoundError:
+                console.print(f"[red]Error:[/red] Snapshot '{after}' not found.")
+                return 1
 
-    if report.degraded_skills:
-        raise typer.Exit(2)  # Non-zero exit so CI pipelines can catch forgetting.
+        report = detector.compare(snap_before, snap_after)
+
+        if json_output:
+            typer.echo(report.to_json())
+        else:
+            report.print(verbose=verbose)
+
+        if output:
+            try:
+                report.save(output)
+                console.print(f"[dim]Report saved to {output}[/dim]")
+            except ValueError as exc:
+                console.print(f"[red]Error:[/red] {exc}")
+                return 1
+
+        return 2 if report.degraded_skills else 0
+
+    if not watch:
+        raise typer.Exit(_run_once())
+
+    # ── watch mode ─────────────────────────────────────────────────────────────
+    if interval < 1:
+        console.print("[red]Error:[/red] --interval must be at least 1 second.")
+        raise typer.Exit(1)
+
+    console.print(
+        f"[dim]Watching for snapshot changes every {interval}s. Press Ctrl-C to stop.[/dim]\n"
+    )
+    last_mtime: float | None = None
+    last_exit_code = 0
+
+    try:
+        while True:
+            # Compute a fingerprint for the snapshot directory state.
+            try:
+                current_mtime = max(
+                    (p.stat().st_mtime for p in mgr.base_dir.rglob("snapshot.json")),
+                    default=0.0,
+                )
+            except Exception:
+                current_mtime = 0.0
+
+            if current_mtime != last_mtime:
+                last_mtime = current_mtime
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                all_snaps = mgr.list_snapshots()
+                n = len(all_snaps)
+
+                if n < 2:
+                    console.print(f"[dim][{ts}][/dim] Waiting for a second snapshot ({n}/2)…")
+                    last_exit_code = 0
+                else:
+                    # Default to the last two; override if named snapshots were given.
+                    snap_b = all_snaps[-2]
+                    snap_a = all_snaps[-1]
+                    _failed = False
+
+                    if before is not None:
+                        try:
+                            snap_b = mgr.load_snapshot(before)
+                        except FileNotFoundError:
+                            console.print(
+                                f"[dim][{ts}][/dim] [red]Snapshot '{before}' not found.[/red]"
+                            )
+                            last_exit_code = 1
+                            _failed = True
+
+                    if after is not None:
+                        try:
+                            snap_a = mgr.load_snapshot(after)
+                        except FileNotFoundError:
+                            console.print(
+                                f"[dim][{ts}][/dim] [red]Snapshot '{after}' not found.[/red]"
+                            )
+                            last_exit_code = 1
+                            _failed = True
+
+                    if _failed:
+                        time.sleep(interval)
+                        continue
+
+                    report = detector.compare(snap_b, snap_a)
+                    if report.degraded_skills:
+                        cats = ", ".join(
+                            f"{c} ({next(x.severity for x in report.comparisons if x.category == c)})"
+                            for c in report.degraded_skills
+                        )
+                        console.print(
+                            f"[dim][{ts}][/dim] [red]✗ DEGRADED[/red] — {snap_b.name} → {snap_a.name} | {cats}"
+                        )
+                        last_exit_code = 2
+                    else:
+                        console.print(
+                            f"[dim][{ts}][/dim] [green]✓ healthy[/green] — {snap_b.name} → {snap_a.name} | {n} snapshots"
+                        )
+                        last_exit_code = 0
+
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Watch stopped.[/dim]")
+
+    raise typer.Exit(last_exit_code)
 
 
 @app.command()
