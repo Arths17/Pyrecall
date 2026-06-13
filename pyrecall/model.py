@@ -106,6 +106,7 @@ class Model:
         replay_buffer_size: int = 500,
         replay_mix_ratio: float = 0.3,
         scoring_method: str = "log_likelihood",
+        snapshot_compression: str = "none",
         gradient_checkpointing: bool = False,
     ) -> None:
         """
@@ -156,6 +157,7 @@ class Model:
         self.scoring_method = scoring_method
         self.max_length = max_length
         self._replay_mix_ratio = replay_mix_ratio
+        self._snapshot_compression = snapshot_compression
         self._gradient_checkpointing = gradient_checkpointing
         self.replay_buffer: ReplayBuffer | None = (
             ReplayBuffer(model_name=model_name, max_size=replay_buffer_size, base_dir=snapshot_dir)
@@ -255,7 +257,7 @@ class Model:
 
         scores = self._run_benchmarks()
         snap = SkillSnapshot(name=name, model_name=self.model_name, scores=scores)
-        self.rollback_manager.save(snap, self.model)
+        self.rollback_manager.save(snap, self.model, compression=self._snapshot_compression)
 
         self._set_baseline(name)
 
@@ -559,15 +561,16 @@ class Model:
             )
 
         # ── 2. Load new model (do this before deleting old one) ───────────────────
+        from .compress import decompressed_adapter
+
         dtype = torch.float16 if self.device == "cuda" else torch.float32
         base_model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype=dtype,
             device_map=None if self.device != "cuda" else "auto",
         )
-        new_model = PeftModel.from_pretrained(
-            base_model, str(snap.adapter_path), is_trainable=False
-        )
+        with decompressed_adapter(snap.adapter_path, snap.adapter_compression) as adapter_dir:
+            new_model = PeftModel.from_pretrained(base_model, str(adapter_dir), is_trainable=False)
         if self.device not in ("cuda",):
             new_model = new_model.to(self.device)
 
