@@ -198,7 +198,7 @@ class TestForgettingReportSerialization:
         report = detector.compare(before, after)
         d = report.to_dict()
         for key in (
-            "healthy",
+            "is_healthy",
             "snapshot_before",
             "snapshot_after",
             "threshold",
@@ -212,7 +212,7 @@ class TestForgettingReportSerialization:
         before = _make_snapshot("b", {"coding": 0.9})
         after = _make_snapshot("a", {"coding": 0.5})
         report = detector.compare(before, after)
-        assert report.to_dict()["healthy"] is False
+        assert report.to_dict()["is_healthy"] is False
 
     def test_to_dict_degraded_skills_populated(self) -> None:
         detector = ForgettingDetector(threshold=0.10)
