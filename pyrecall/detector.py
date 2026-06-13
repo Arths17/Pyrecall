@@ -160,6 +160,11 @@ class ForgettingReport:
         """True when no skill degraded beyond the threshold."""
         return len(self.degraded_skills) == 0
 
+    @property
+    def severity(self) -> dict[str, str]:
+        """Severity label per category — convenience wrapper over per-comparison severity."""
+        return {c.category: c.severity for c in self.comparisons}
+
     def prompts_for_category(self, category: str) -> list[PromptComparison]:
         """Return per-prompt comparisons for *category*, worst delta first."""
         return sorted(
@@ -170,7 +175,7 @@ class ForgettingReport:
     def to_dict(self) -> dict:
         """Return a JSON-serialisable representation of the report."""
         return {
-            "healthy": self.is_healthy,
+            "is_healthy": self.is_healthy,
             "snapshot_before": self.snapshot_before,
             "snapshot_after": self.snapshot_after,
             "threshold": self.threshold,

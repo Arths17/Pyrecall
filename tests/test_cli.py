@@ -760,7 +760,7 @@ class TestCheckJson:
             result = runner.invoke(app, ["check", "--json"])
 
         data = json.loads(result.output)
-        assert "healthy" in data
+        assert "is_healthy" in data
         assert "snapshot_before" in data
         assert "snapshot_after" in data
         assert "degraded_skills" in data
@@ -780,7 +780,7 @@ class TestCheckJson:
             result = runner.invoke(app, ["check", "--json"])
 
         data = json.loads(result.output)
-        assert data["healthy"] is True
+        assert data["is_healthy"] is True
         assert data["degraded_skills"] == []
 
     def test_json_healthy_false_when_forgetting(
@@ -797,7 +797,7 @@ class TestCheckJson:
 
         assert result.exit_code == 2
         data = json.loads(result.output)
-        assert data["healthy"] is False
+        assert data["is_healthy"] is False
         assert "coding" in data["degraded_skills"]
 
     def test_json_comparisons_contain_scores(
